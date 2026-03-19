@@ -1,0 +1,9 @@
+.card { background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--gborder); border-radius: 22px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.25s ease, border-color 0.25s ease; animation: fadeIn 0.5s ease 0.3s both; }
+.card:hover { transform: translateY(-4px); border-color: var(--theme); }
+.label   { font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); margin-bottom: 12px; }
+.row     { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.fanIcon { font-size: 1.5rem; display: inline-block; }
+.slider  { flex: 1; -webkit-appearance: none; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.1); outline: none; cursor: pointer; }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--theme); box-shadow: 0 0 8px var(--theme); cursor: pointer; }
+.val  { font-size: 1rem; font-weight: 700; color: var(--theme); min-width: 44px; font-family: var(--font-mono); }
+.hint { font-size: 0.65rem; color: var(--text2); margin-top: 8px; letter-spacing: 1px; font-family: var(--font-mono); }

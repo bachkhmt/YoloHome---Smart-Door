@@ -1,0 +1,15 @@
+.container {
+  position: fixed; bottom: 22px; right: 22px;
+  display: flex; flex-direction: column; gap: 8px; z-index: 999;
+}
+.toast {
+  padding: 11px 18px; border-radius: 14px; font-size: 0.75rem; font-weight: 500;
+  animation: tin .3s ease, tout .4s ease 3.6s forwards;
+  display: flex; align-items: center; gap: 8px;
+  min-width: 240px; max-width: 320px;
+  backdrop-filter: blur(12px);
+}
+.ok   { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.35); color: var(--success); }
+.err  { background: rgba(239,68,68,0.15);  border: 1px solid rgba(239,68,68,0.35);  color: var(--danger); }
+.warn { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.35); color: var(--warn); }
+.inf  { background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.35); color: #a78bfa; }

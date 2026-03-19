@@ -1,0 +1,7 @@
+.card  { background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--gborder); border-radius: 22px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.25s ease, border-color 0.25s ease; animation: fadeIn 0.5s ease 0.55s both; }
+.card:hover { transform: translateY(-4px); border-color: var(--theme); }
+.label { font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); margin-bottom: 12px; }
+.grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.item  { padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--gborder); text-align: center; }
+.iLabel{ font-size: 0.55rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text2); margin-bottom: 3px; }
+.iVal  { font-size: 0.9rem; font-weight: 700; font-family: var(--font-mono); }

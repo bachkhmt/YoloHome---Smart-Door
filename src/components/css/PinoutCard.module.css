@@ -1,0 +1,13 @@
+.card { grid-column: span 2; background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--gborder); border-radius: 22px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.25s ease, border-color 0.25s ease; animation: fadeIn 0.5s ease 0.6s both; }
+.card:hover { transform: translateY(-4px); border-color: var(--theme); }
+.label    { font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); margin-bottom: 12px; }
+.hwBox    { background: rgba(0,0,0,0.3); border: 1px solid var(--gborder); border-radius: 14px; padding: 14px; font-size: 0.7rem; line-height: 1.9; color: var(--text2); font-family: var(--font-mono); }
+.chipTitle{ font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.pins     { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.pin      { padding: 3px 10px; border-radius: 6px; font-size: 0.58rem; font-weight: 500; letter-spacing: 1px; font-family: var(--font-mono); }
+.c { color: #4cc9f0; background: rgba(76,201,240,0.1);  border: 1px solid rgba(76,201,240,0.25); }
+.p { color: #f72585; background: rgba(247,37,133,0.1);  border: 1px solid rgba(247,37,133,0.25); }
+.g { color: #10b981; background: rgba(16,185,129,0.1);  border: 1px solid rgba(16,185,129,0.25); }
+.y { color: #f59e0b; background: rgba(245,158,11,0.1);  border: 1px solid rgba(245,158,11,0.25); }
+.n { color: var(--text2); background: rgba(255,255,255,0.05); border: 1px solid var(--gborder); }
+@media(max-width: 580px) { .card { grid-column: span 1; } }

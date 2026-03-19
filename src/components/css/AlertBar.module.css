@@ -1,0 +1,12 @@
+.wrap { max-width: 1200px; margin: 0 auto 16px; display: flex; flex-direction: column; gap: 8px; }
+.bar  {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 20px; border-radius: 14px;
+  background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+  color: var(--danger); font-size: 0.78rem; font-weight: 600;
+  animation: alertflash .6s ease-in-out infinite alternate;
+}
+.meta    { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.sev     { font-size: 0.6rem; padding: 2px 7px; border-radius: 6px; background: rgba(239,68,68,0.2); letter-spacing: 1px; }
+.resolve { background: none; border: 1px solid rgba(239,68,68,0.4); color: var(--danger); font-size: 0.68rem; padding: 3px 10px; border-radius: 8px; cursor: pointer; transition: background 0.2s; font-family: var(--font-main); }
+.resolve:hover { background: rgba(239,68,68,0.15); }

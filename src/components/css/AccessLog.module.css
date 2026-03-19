@@ -1,0 +1,15 @@
+.card  { grid-column: span 2; background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--gborder); border-radius: 22px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.25s ease, border-color 0.25s ease; animation: fadeIn 0.5s ease 0.5s both; }
+.card:hover { transform: translateY(-4px); border-color: var(--theme); }
+.label { font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); margin-bottom: 12px; }
+.wrap  { max-height: 195px; overflow-y: auto; }
+table  { width: 100%; border-collapse: collapse; }
+thead th { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); padding: 0 8px 10px; border-bottom: 1px solid var(--gborder); text-align: left; position: sticky; top: 0; background: rgba(15,10,31,0.9); backdrop-filter: blur(8px); }
+tbody td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.78rem; vertical-align: middle; }
+tbody tr:hover { background: rgba(236,72,153,0.04); }
+.time   { color: var(--text2); font-size: .72rem; font-family: var(--font-mono); }
+.lat    { color: var(--text2); font-size: .68rem; font-family: var(--font-mono); }
+.tag    { font-size: 0.6rem; color: var(--text2); background: rgba(255,255,255,0.06); padding: 2px 7px; border-radius: 6px; }
+.badge  { display: inline-block; padding: 2px 9px; border-radius: 8px; font-size: 0.62rem; font-weight: 600; }
+.ok     { color: var(--success); background: rgba(16,185,129,0.1);  border: 1px solid rgba(16,185,129,0.25); }
+.fail   { color: var(--danger);  background: rgba(239,68,68,0.1);   border: 1px solid rgba(239,68,68,0.25); }
+@media(max-width: 580px) { .card { grid-column: span 1; } }

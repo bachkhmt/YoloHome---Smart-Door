@@ -1,0 +1,25 @@
+.card  { background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--gborder); border-radius: 22px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.25s ease, border-color 0.25s ease; animation: fadeIn 0.5s ease 0.45s both; }
+.card:hover { transform: translateY(-4px); border-color: var(--theme); }
+.label { font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); margin-bottom: 12px; }
+.list  { display: flex; flex-direction: column; gap: 8px; max-height: 160px; overflow-y: auto; margin-bottom: 10px; }
+.item  { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--gborder); transition: border-color .2s; }
+.item:hover { border-color: var(--theme); }
+.avt   { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(236,72,153,0.4); }
+.info  { flex: 1; }
+.uname { font-size: 0.82rem; font-weight: 600; }
+.urole { font-size: 0.6rem; color: var(--text2); letter-spacing: 1px; }
+.dot   { width: 7px; height: 7px; border-radius: 50%; }
+.dotOn  { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.dotOff { background: var(--text2); }
+.del   { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 0.7rem; padding: 2px 6px; border-radius: 6px; transition: color 0.2s; }
+.del:hover { color: var(--danger); }
+.btnAdd { width: 100%; padding: 9px; border-radius: 11px; background: rgba(255,255,255,0.06); border: 1px solid var(--gborder); color: var(--text); font-family: var(--font-main); font-size: 0.78rem; cursor: pointer; transition: all 0.2s; }
+.btnAdd:hover { border-color: var(--theme); background: rgba(236,72,153,0.08); }
+.form  { margin-top: 8px; display: flex; flex-direction: column; gap: 0; }
+.input { width: 100%; padding: 9px 14px; border-radius: 11px; background: rgba(255,255,255,0.06); border: 1px solid var(--gborder); color: var(--text); font-family: var(--font-main); font-size: 0.82rem; outline: none; transition: border-color .2s; margin-bottom: 8px; }
+.input:focus       { border-color: var(--theme); }
+.input::placeholder{ color: var(--text2); }
+.btnRow  { display: flex; gap: 8px; }
+.btn     { flex: 1; padding: 8px; border-radius: 10px; border: none; font-family: var(--font-main); font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btnPrimary { background: linear-gradient(90deg,var(--theme),var(--theme2)); color: #fff; }
+.btnOutline { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--gborder); }

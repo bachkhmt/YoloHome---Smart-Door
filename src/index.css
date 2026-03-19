@@ -1,0 +1,43 @@
+/* ── GLOBAL RESET & VARIABLES ── */
+:root {
+  --theme:   #ec4899;
+  --theme2:  #8b5cf6;
+  --bg:      #0f0a1f;
+  --glass:   rgba(255,255,255,0.05);
+  --gborder: rgba(255,255,255,0.12);
+  --text:    #fdf2f8;
+  --text2:   rgba(253,242,248,0.55);
+  --success: #10b981;
+  --danger:  #ef4444;
+  --warn:    #f59e0b;
+  --font-main: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+
+body {
+  font-family: var(--font-main);
+  background: radial-gradient(ellipse 80% 60% at 20% -10%, var(--theme), var(--bg) 55%);
+  background-color: var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100vh;
+  padding: 24px;
+  transition: background 0.8s ease;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--theme); border-radius: 4px; }
+
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+@keyframes ledpulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.4);opacity:0.6;} }
+@keyframes scandown { from{top:0;} to{top:100%;} }
+@keyframes popin { from{opacity:0;transform:scale(0.75);} to{opacity:1;transform:scale(1);} }
+@keyframes tin  { from{transform:translateX(30px);opacity:0;} to{transform:translateX(0);opacity:1;} }
+@keyframes tout { from{opacity:1;} to{opacity:0;pointer-events:none;} }
+@keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+@keyframes alertflash { from{opacity:1;} to{opacity:0.55;} }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }

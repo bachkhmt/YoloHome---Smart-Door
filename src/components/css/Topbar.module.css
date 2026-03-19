@@ -1,0 +1,37 @@
+.topbar {
+  max-width: 1200px; margin: 0 auto 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px;
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--gborder);
+  border-radius: 20px;
+}
+.logo {
+  font-size: 1.25rem; font-weight: 700; letter-spacing: 1px;
+  background: linear-gradient(90deg,#fff,var(--theme));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.timeBadge {
+  font-family: var(--font-mono);
+  font-size: 0.85rem; color: var(--text2);
+  background: rgba(255,255,255,0.06);
+  padding: 6px 16px; border-radius: 30px; letter-spacing: 2px;
+}
+.right { display: flex; align-items: center; gap: 12px; }
+.dbBadge {
+  font-size: 0.7rem; padding: 4px 10px; border-radius: 8px;
+  font-weight: 600; letter-spacing: 0.5px;
+}
+.dbOn  { color: var(--success); background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); }
+.dbOff { color: var(--warn);    background: rgba(245,158,11,0.1);  border: 1px solid rgba(245,158,11,0.25); }
+.onlineDot {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 0.78rem; color: var(--success);
+}
+.onlineDot::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success); box-shadow: 0 0 8px var(--success);
+  animation: blink 2s ease-in-out infinite;
+  display: inline-block;
+}

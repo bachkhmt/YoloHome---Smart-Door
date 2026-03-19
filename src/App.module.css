@@ -1,0 +1,30 @@
+.dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .dashboard { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 580px) {
+  .dashboard { grid-template-columns: 1fr; }
+}
+
+.loadingScreen {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+}
+.loadingDot {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top-color: var(--theme, #ec4899);
+  animation: spin 0.8s linear infinite;
+}
+.loadingText {
+  font-size: 0.85rem; color: rgba(253,242,248,0.55);
+  letter-spacing: 1px;
+}

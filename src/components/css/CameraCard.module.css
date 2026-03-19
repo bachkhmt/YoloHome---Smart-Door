@@ -1,0 +1,31 @@
+.card { background: var(--glass); backdrop-filter: blur(20px); border: 1px solid var(--gborder); border-radius: 22px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); transition: transform 0.25s ease, border-color 0.25s ease; animation: fadeIn 0.5s ease 0.1s both; }
+.card:hover { transform: translateY(-4px); border-color: var(--theme); box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+
+.topRow     { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.label      { font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--theme); }
+
+.modeToggle { display: flex; gap: 2px; background: rgba(255,255,255,0.06); border-radius: 10px; padding: 3px; }
+.modeBtn    { padding: 4px 12px; border-radius: 8px; border: none; font-family: var(--font-main); font-size: 0.65rem; font-weight: 600; cursor: pointer; background: none; color: var(--text2); transition: all 0.2s; }
+.modeBtn.active { background: var(--theme); color: #fff; box-shadow: 0 2px 8px rgba(236,72,153,0.4); }
+
+/* Sim mode */
+.camBox     { height: 155px; background: #000; border-radius: 14px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 1.5px solid var(--theme); gap: 8px; }
+.scanline   { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--theme); box-shadow: 0 0 10px var(--theme); animation: scandown 2.2s linear infinite; }
+.corners    { position: absolute; inset: 0; pointer-events: none; }
+.corners .c { position: absolute; width: 13px; height: 13px; border-color: var(--theme); border-style: solid; opacity: 0.7; }
+.tl { top:8px; left:8px; border-width:2px 0 0 2px; } .tr { top:8px; right:8px; border-width:2px 2px 0 0; }
+.bl { bottom:8px; left:8px; border-width:0 0 2px 2px; } .br { bottom:8px; right:8px; border-width:0 2px 2px 0; }
+.avatar    { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--success); box-shadow: 0 0 12px var(--success); animation: popin .3s ease; }
+.camLabel  { font-size: 0.8rem; font-weight: 600; letter-spacing: 2px; transition: color 0.3s; font-family: var(--font-mono); }
+.camSub    { font-size: 0.6rem; color: var(--text2); letter-spacing: 1px; }
+.progWrap  { margin-top: 10px; }
+.progHd    { display: flex; justify-content: space-between; font-size: 0.62rem; color: var(--text2); margin-bottom: 5px; }
+.progBar   { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+.progFill  { height: 100%; border-radius: 2px; background: linear-gradient(90deg,var(--theme),var(--theme2)); transition: width .15s linear; }
+
+/* Real camera mode */
+.realWrap   { display: flex; flex-direction: column; gap: 8px; }
+.videoWrap  { position: relative; border-radius: 14px; overflow: hidden; border: 1.5px solid var(--theme); background: #000; }
+.video      { width: 100%; height: 200px; object-fit: cover; display: block; transform: scaleX(-1); }
+.videoOverlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: var(--text2); background: rgba(0,0,0,0.7); text-align: center; padding: 12px; }
+.liveTag    { font-size: 0.62rem; font-weight: 700; color: var(--danger); letter-spacing: 2px; display: flex; align-items: center; gap: 4px; }

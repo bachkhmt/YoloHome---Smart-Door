@@ -1,0 +1,40 @@
+.hero {
+  grid-column: span 3;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  background: var(--glass); backdrop-filter: blur(20px);
+  border: 1px solid var(--gborder); border-bottom: 2px solid var(--theme);
+  border-radius: 22px; padding: 22px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  animation: fadeIn 0.5s ease;
+}
+.hero:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+.left  { display: flex; align-items: center; gap: 18px; }
+.doorIcon { font-size: 50px; transition: all 0.4s; }
+.title { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.sub   { font-size: 0.78rem; color: var(--text2); margin-top: 2px; }
+.pill  { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; margin-top: 6px; }
+.pillLocked   { background: rgba(239,68,68,0.12);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
+.pillUnlocked { background: rgba(16,185,129,0.12); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+.pillAuth     { background: rgba(245,158,11,0.12); color: var(--warn);    border: 1px solid rgba(245,158,11,0.3); }
+.pillGranted  { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.4); }
+.pillDenied   { background: rgba(239,68,68,0.15);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.4); }
+.ledRow { display: flex; gap: 14px; margin-top: 10px; }
+.ledItem { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.6rem; color: var(--text2); }
+.led    { width: 12px; height: 12px; border-radius: 50%; transition: all 0.35s; }
+.off    { background: #555; filter: brightness(0.18); box-shadow: none; }
+.onBlue   { background: #3b82f6; box-shadow: 0 0 8px #3b82f6; }
+.onYellow { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.onGreen  { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.onRed    { background: var(--danger);  box-shadow: 0 0 8px var(--danger); }
+.pulse { animation: ledpulse 0.9s ease-in-out infinite; }
+.right { display: flex; gap: 10px; align-items: center; }
+.btn { padding: 10px 20px; border-radius: 12px; border: none; font-family: var(--font-main); font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px; }
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btnPrimary { background: linear-gradient(90deg,var(--theme),var(--theme2)); color: #fff; box-shadow: 0 4px 16px rgba(236,72,153,0.35); padding: 11px 22px; }
+.btnPrimary:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(236,72,153,0.5); }
+.btnSuccess { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.3); padding: 8px 16px; font-size: 0.72rem; border-radius: 10px; }
+.btnDanger  { background: rgba(239,68,68,0.1);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3);  padding: 8px 16px; font-size: 0.72rem; border-radius: 10px; }
+@media(max-width: 900px) { .hero { grid-column: span 2; } }
+@media(max-width: 580px) { .hero { grid-column: span 1; flex-direction: column; align-items: flex-start; } .right { flex-wrap: wrap; } }
