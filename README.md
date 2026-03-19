@@ -23,25 +23,25 @@ Hệ thống khóa cửa thông minh sử dụng **YOLO:Bit (ESP32)** kết hợ
 ## 1. Tổng Quan Hệ Thống
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────┐
 │                     KIẾN TRÚC HỆ THỐNG                         │
-│                                                                 │
+│                                                                │
 │   [React Dashboard]  ←──────────────────────────────────────┐  │
 │        :5173         │  HTTP / Proxy                        │  │
-│           │          ▼                                       │  │
+│           │          ▼                                      │  │
 │           └───► [Node.js Backend] ◄──► [MySQL Database]     │  │
-│                      :3001         SQL       yolo_home       │  │
-│                        │                                     │  │
-│                        │  HTTP POST/GET                      │  │
-│                        ▼                                     │  │
-│                  [YOLO:Bit ESP32]  ──────────────────────────┘  │
-│                    (WiFi)                                        │
-│                        │                                        │
-│              ┌─────────┼──────────┐                             │
-│              ▼         ▼          ▼                             │
-│           [Servo]    [LED]    [Buzzer]                          │
-│           GPIO12    GPIO5    GPIO15                             │
-└─────────────────────────────────────────────────────────────────┘
+│                      :3001         SQL       yolo_home      │  │
+│                        │                                    │  │
+│                        │  HTTP POST/GET                     │  │
+│                        ▼                                    │  │
+│                  [YOLO:Bit ESP32]  ─────────────────────────┘  │
+│                    (WiFi)                                      │
+│                        │                                       │
+│              ┌─────────┼──────────┐                            │
+│              ▼         ▼          ▼                            │
+│           [Servo]    [LED]    [Buzzer]                         │
+│           GPIO12    GPIO5    GPIO15                            │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 **Luồng hoạt động:**
@@ -141,8 +141,6 @@ Mở MySQL Workbench → click vào connection **"Local instance MySQL"** → đ
 2. Chọn file `server/schema.sql` trong thư mục project
 3. Nhấn **⚡ Execute All** (hoặc `Ctrl + Shift + Enter`)
 
-Hoặc copy toàn bộ nội dung dưới đây vào tab SQL mới và Execute:
-
 
 ### Bước 4.3 — Kiểm Tra
 
@@ -150,11 +148,19 @@ Sau khi chạy xong, trong panel **Schemas** bên trái sẽ thấy:
 
 ```
 yolo_home
-  └── Tables
-       ├── access_logs
-       ├── door_state
-       ├── sensor_readings
-       └── users
+  ├── Tables
+  │    ├── access_logs
+  │    ├── door_state
+  │    ├── remote_controls
+  │    ├── security_alerts
+  │    ├── sensor_readings
+  │    ├── system_backups
+  │    └── users
+  └── Views
+       ├── v_access_log_full
+       ├── v_dashboard_summary
+       ├── v_unresolved_alerts
+       └── v_weekly_auth_stats
 ```
 
 Chạy lệnh này để kiểm tra dữ liệu mẫu đã vào chưa:
