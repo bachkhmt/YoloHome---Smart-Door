@@ -20,13 +20,19 @@ app.use(express.json())
 let pool = null
 
 async function getPool() {
-  if (pool) return pool
+  if (pool) return pool;
+
+  if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
+    console.error("❌ LỖI NGHIÊM TRỌNG: Thiếu thông tin cấu hình Database trong file .env!");
+    process.exit(1); 
+  }
+
   pool = mysql.createPool({
-    host:               process.env.DB_HOST || 'localhost',
+    host:               process.env.DB_HOST,
     port:               parseInt(process.env.DB_PORT) || 3306,
-    user:               process.env.DB_USER || 'root',
-    password:           process.env.DB_PASS || 'mk',
-    database:           process.env.DB_NAME || 'yolo_home',
+    user:               process.env.DB_USER,
+    password:           process.env.DB_PASS, 
+    database:           process.env.DB_NAME,
     waitForConnections: true,
     connectionLimit:    10,
     connectTimeout:     10000,
