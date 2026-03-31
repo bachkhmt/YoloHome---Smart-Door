@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────
+# YOLOHOME — settings
+# ──────────────────────────────────────────
+
+use_simulator: true      # false when running on real hardware
+log_level: INFO
+
+# Adafruit IO credentials (override with AIO_USERNAME / AIO_KEY env vars)
+adafruit:
+  username: "your_username"
+  aio_key: "your_aio_key"
+
+# Camera (face recognition input)
+camera:
+  width: 640
+  height: 480
+  fps: 15
+  face_brightness_threshold: 100
+
+# Microphone (sound recognition input)
+microphone:
+  sample_rate: 16000
+  chunk_ms: 100
+  rms_threshold: 0.05
+
+# micro:bit (optional sensor check)
+microbit:
+  serial_port: "/dev/ttyACM0"
+  baud_rate: 115200
+  motion_accel_threshold: 1500
+
+# Module 2 — alerting thresholds
+thresholds:
+  temperature_min: 10.0
+  temperature_max: 40.0
+  light_min: 0
+  light_max: 200
+  sound_rms_alert: 0.4
