@@ -98,7 +98,7 @@ app.get('/api/users/encodings', async (req, res) => {
   }
 })
 
-// 2. Cập nhật khuôn mặt cho một User cụ thể
+// 2. Cập nhật khuôn mặt cho User cụ thể
 app.patch('/api/users/:id/face', async (req, res) => {
   try {
     const { face_encoding } = req.body // Nhận mảng 128 số từ Python gửi lên

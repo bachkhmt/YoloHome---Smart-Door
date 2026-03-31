@@ -36,3 +36,10 @@ IoT/.venv/
 venv/
 ENV/
 env/
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Nếu muốn chỉ định đích danh cho thư mục IoT
+IoT/**/__pycache__/
