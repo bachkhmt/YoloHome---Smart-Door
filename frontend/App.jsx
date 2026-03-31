@@ -32,7 +32,11 @@ export default function App() {
   return (
     <>
       <Topbar dbConnected={s.dbConnected} uptimeStart={s.uptimeStart} />
-      <AlertBar alerts={s.alerts} resolveAlertById={s.resolveAlertById} />
+      <AlertBar 
+        alerts={s.alerts} 
+        resolveAlertById={s.resolveAlertById} 
+        resolveAllAlerts={s.resolveAllAlerts} 
+      />
 
       <main className={styles.dashboard}>
         <HeroCard

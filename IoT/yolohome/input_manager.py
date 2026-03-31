@@ -48,9 +48,7 @@ class InputManager:
         self.config = config or load_config()
 
         # Initialize parsers with config values
-        self.camera_parser = CameraParser(
-            brightness_threshold=self.config.camera.face_brightness_threshold,
-        )
+        self.camera_parser = CameraParser()
         self.sound_parser = SoundParser(
             rms_threshold=self.config.microphone.rms_threshold,
         )
@@ -133,7 +131,7 @@ class InputManager:
         # Open hardware / resources
         self._cam.open()
         self._mic.open()
-        self._mb.open()
+        # self._mb.open() # <-- Microbit 
 
         self._running = True
 
@@ -149,11 +147,11 @@ class InputManager:
         t_mic.start()
         self._threads.append(t_mic)
 
-        t_mb = threading.Thread(
-            target=self._run_microbit, args=(self._mb,), daemon=True
-        )
-        t_mb.start()
-        self._threads.append(t_mb)
+        # t_mb = threading.Thread(
+        #     target=self._run_microbit, args=(self._mb,), daemon=True
+        # )
+        # t_mb.start()
+        # self._threads.append(t_mb)
 
         mode = "simulator" if self.config.use_simulator else "real hardware"
         logger.info(f"InputManager started ({mode})")

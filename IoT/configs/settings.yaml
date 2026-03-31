@@ -2,7 +2,7 @@
 # YOLOHOME — settings
 # ──────────────────────────────────────────
 
-use_simulator: true      # false when running on real hardware
+use_simulator: false     # false when running on real hardware
 log_level: INFO
 
 # Adafruit IO credentials (override with AIO_USERNAME / AIO_KEY env vars)

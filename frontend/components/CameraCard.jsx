@@ -1,51 +1,17 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import styles from './css/CameraCard.module.css'
 
 export default function CameraCard({ camState, authProgress }) {
-  const [mode,         setMode]         = useState('sim')
-  const [cameraActive, setCameraActive] = useState(false)
-  const [camError,     setCamError]     = useState(null)
-  const videoRef  = useRef(null)
-  const streamRef = useRef(null)
+  const [mode, setMode] = useState('sim')
 
-  const startCamera = useCallback(async () => {
-    setCamError(null)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-      setCameraActive(true)
-    } catch (e) {
-      const msg =
-        e.name === 'NotAllowedError' ? 'Cần cho phép quyền camera trong trình duyệt' :
-        e.name === 'NotFoundError'   ? 'Không tìm thấy camera' :
-        'Lỗi: ' + e.message
-      setCamError(msg)
-    }
-  }, [])
-
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    if (videoRef.current) videoRef.current.srcObject = null
-    setCameraActive(false)
-    setCamError(null)
-  }, [])
-
-  const handleEnableReal = useCallback(async () => {
+  // Khi bấm "Camera thật", chúng ta chỉ cần chuyển mode để React render thẻ <img>
+  const handleEnableReal = useCallback(() => {
     setMode('real')
-    await startCamera()
-  }, [startCamera])
+  }, [])
 
   const handleDisableReal = useCallback(() => {
-    stopCamera()
     setMode('sim')
-  }, [stopCamera])
+  }, [])
 
   return (
     <div className={styles.card}>
@@ -81,7 +47,7 @@ export default function CameraCard({ camState, authProgress }) {
             <div className={styles.camLabel} style={{ color: camState.color }}>{camState.label}</div>
             <div className={styles.camSub}>{camState.sub}</div>
           </div>
-          {authProgress.active && (
+          {authProgress?.active && (
             <div className={styles.progWrap}>
               <div className={styles.progHd}>
                 <span>{authProgress.label}</span>
@@ -95,32 +61,37 @@ export default function CameraCard({ camState, authProgress }) {
         </>
       )}
 
-      {/* ── CAMERA THẬT ── */}
+      {/* ── CAMERA THẬT (ESP32-CAM thông qua Python Flask) ── */}
       {mode === 'real' && (
         <div className={styles.realWrap}>
           <div className={styles.videoWrap}>
-            <video
-              ref={videoRef}
-              className={styles.video}
-              muted playsInline autoPlay
+            {/* Lấy nguồn video từ trạm phát sóng Flask của Python ở port 5050.
+              Việc thêm query `?t=...` giúp tránh bị cache hình ảnh trên trình duyệt 
+            */}
+            <img 
+              src="http://localhost:5050/video_feed" 
+              className={styles.video} 
+              alt="ESP32-CAM via Python"
+              onError={(e) => {
+                // Tạm ẩn video và hiện thông báo lỗi để không gọi lại liên tục
+                e.target.style.display = 'none';
+                if (e.target.nextSibling) {
+                  e.target.nextSibling.style.display = 'block';
+                }
+              }}
             />
-            {!cameraActive && !camError && (
-              <div className={styles.videoOverlay}>Đang khởi động camera...</div>
-            )}
-            {camError && (
-              <div className={styles.videoOverlay} style={{ color: 'var(--danger)' }}>
-                ❌ {camError}
-              </div>
-            )}
-            {/* Góc khung */}
+            {/* Thông báo lỗi ẩn, chỉ hiện ra khi thẻ img bị lỗi (onError) */}
+            <div className={styles.videoOverlay} style={{ display: 'none', color: 'var(--danger)' }}>
+              ❌ Không thể kết nối luồng camera (Hãy kiểm tra Backend Python)
+            </div>
+
+            {/* Góc khung trang trí */}
             <div className={styles.corners}>
               <div className={`${styles.c} ${styles.tl}`}/><div className={`${styles.c} ${styles.tr}`}/>
               <div className={`${styles.c} ${styles.bl}`}/><div className={`${styles.c} ${styles.br}`}/>
             </div>
           </div>
-          {cameraActive && (
-            <div className={styles.liveTag}>🔴 LIVE</div>
-          )}
+          <div className={styles.liveTag}>🔴 LIVE ESP32</div>
         </div>
       )}
     </div>

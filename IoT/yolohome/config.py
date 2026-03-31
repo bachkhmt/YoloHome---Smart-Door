@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-CONFIG_DIR = Path(__file__).parent / "config"
+CONFIG_DIR = Path(__file__).parent.parent / "configs"
 DEFAULT_CONFIG = CONFIG_DIR / "settings.yaml"
 
 

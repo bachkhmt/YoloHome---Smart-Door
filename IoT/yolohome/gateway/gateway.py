@@ -97,7 +97,15 @@ class Gateway:
                 self.mqtt.publish(FEEDS["light"], light)
 
         elif event.event_type == EventType.FACE_DETECTED:
-            self.mqtt.publish(FEEDS["face"], event.data)
+                self.mqtt.publish(FEEDS["face"], event.data)
+                
+                # --- MỞ KHOÁ TỰ ĐỘNG NẾU LÀ NGƯỜI NHÀ ---
+                faces = event.data.get("faces", [])
+                for face in faces:
+                    if face.get("label") not in ["unknown", "Người lạ"]: 
+                        logger.info(f"Chào {face.get('label')}, đang mở cửa...")
+                        self.send_command(DeviceCommand("door_lock", "unlock"))
+                        break
 
         elif event.event_type == EventType.SOUND_DETECTED:
             self.mqtt.publish(FEEDS["sound"], event.data)
@@ -126,21 +134,15 @@ class Gateway:
                 requests.post(f"{local_api}/sensors", json=payload, timeout=2)
 
             elif event.event_type == EventType.FACE_DETECTED:
-                # Lấy khuôn mặt đầu tiên phát hiện được
+                self.mqtt.publish(FEEDS["face"], event.data)
+                
+                # --- MỞ KHOÁ TỰ ĐỘNG NẾU LÀ NGƯỜI NHÀ ---
                 faces = event.data.get("faces", [])
                 for face in faces:
-                    label = face.get("label", "unknown")
-                    conf = face.get("confidence", 0.0)
-                    
-                    # API /api/logs yêu cầu: user_id, action, status, confidence, image_snapshot
-                    log_payload = {
-                        "user_id": 1 if label != "unknown" else None, # Tạm gán ID 1 cho người quen
-                        "action": "face_detected",
-                        "status": "success" if conf > 0.8 else "failed",
-                        "confidence": conf,
-                        "image_snapshot": None
-                    }
-                    requests.post(f"{local_api}/logs", json=log_payload, timeout=2)
+                    if face.get("label") != "Người lạ":
+                        logger.info(f"🔓 Chào {face.get('label')}, đang mở cửa...")
+                        self.send_command(DeviceCommand("door_lock", "unlock"))
+                        break # Chỉ cần 1 người quen là mở
 
             elif event.event_type in (EventType.MOTION_TRIGGER, EventType.SOUND_DETECTED):
                 # Lưu log khi có âm thanh hoặc chuyển động bất thường

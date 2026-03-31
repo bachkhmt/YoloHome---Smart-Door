@@ -241,11 +241,9 @@ export function useAppState() {
     } catch (_) {}
   }, [])
 
-  // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
   //  FR10 — SECURITY ALERT (DB-backed)
   // ══════════════════════════════════════════════════════════════
-  // Backend tự tạo alert khi POST /api/logs phát hiện 3 fail/60s.
-  // Frontend polling mỗi 10s sẽ tự load về — không cần xử lý thêm ở đây.
   const resolveAlertById = useCallback(async (id) => {
     try {
       await apiResolveAlert(id, currentUser.current?.id || null)
@@ -255,6 +253,22 @@ export function useAppState() {
       toast('err', '❌ Không thể xử lý cảnh báo')
     }
   }, [toast])
+
+  // ---> THÊM HÀM MỚI VÀO ĐÂY <---
+  const resolveAllAlerts = useCallback(async () => {
+    if (!alerts.length) return;
+    try {
+      // Chạy xử lý API song song cho tất cả alerts
+      await Promise.all(
+        alerts.map(a => apiResolveAlert(a.id, currentUser.current?.id || null))
+      );
+      // Xóa hết danh sách cảnh báo trên giao diện ngay lập tức
+      setAlerts([]);
+      toast('ok', `✅ Đã xử lý toàn bộ ${alerts.length} cảnh báo`);
+    } catch (_) {
+      toast('err', '❌ Có lỗi khi xử lý danh sách cảnh báo');
+    }
+  }, [alerts, toast]);
 
   // ══════════════════════════════════════════════════════════════
   //  AUTH FLOW
@@ -385,6 +399,8 @@ export function useAppState() {
     startAuth, manualUnlock, manualLock,
     addUserLocal, removeUser,
     toggleAuthMode, applyTheme,
-    resolveAlertById, toast,
+    resolveAlertById, toast, resolveAllAlerts
   }
 }
+
+

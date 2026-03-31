@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════
---  YOLO Home — MySQL Schema  (v3 — final)
+--  YOLO Home — MySQL Schema  (v3 — face recognition update)
 --  Workbench: File → Open SQL Script → Execute All (Ctrl+Shift+Enter)
 --  Terminal:  mysql -u root -p < server/schema.sql
 -- ════════════════════════════════════════════════════════════════════
@@ -37,6 +37,7 @@ CREATE TABLE users (
   seed           VARCHAR(100) NOT NULL COMMENT 'Avatar seed cho DiceBear',
   online         TINYINT(1)   NOT NULL DEFAULT 1  COMMENT '1=active, 0=disabled',
   face_enrolled  TINYINT(1)   NOT NULL DEFAULT 0  COMMENT '1=đã đăng ký khuôn mặt',
+  face_encoding  JSON         NULL                COMMENT 'Mảng vector đặc trưng khuôn mặt (128d)',
   voice_enrolled TINYINT(1)   NOT NULL DEFAULT 0  COMMENT '1=đã đăng ký giọng nói',
   created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -44,9 +45,10 @@ CREATE TABLE users (
   INDEX idx_online (online)
 ) COMMENT = 'Danh sách người dùng được phép truy cập';
 
+-- Chuyển face_enrolled về 0 vì database mới chưa có dữ liệu mảng face_encoding thực tế
 INSERT INTO users (name, role, seed, online, face_enrolled, voice_enrolled) VALUES
-  ('Nguyễn Văn An', 'Owner',  'AnOwner',  1, 1, 1),
-  ('Trần Thị Bích', 'Family', 'BichFam',  1, 1, 0),
+  ('Nguyễn Văn An', 'Owner',  'AnOwner',  1, 0, 1),
+  ('Trần Thị Bích', 'Family', 'BichFam',  1, 0, 0),
   ('Lê Minh Đức',   'Guest',  'DucGuest', 0, 0, 0),
   ('Admin',         'Admin',  'AdminSys', 1, 0, 0);
 

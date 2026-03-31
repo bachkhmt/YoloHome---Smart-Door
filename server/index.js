@@ -81,6 +81,41 @@ app.get('/api/users', async (req, res) => {
   }
 })
 
+// 1. Lấy danh sách encodings của tất cả người nhà (cho Python tải về lúc khởi động)
+app.get('/api/users/encodings', async (req, res) => {
+  try {
+    const rows = await query(
+      'SELECT id, name, face_encoding FROM users WHERE face_enrolled = 1 AND online = 1'
+    )
+    // Chuyển string JSON từ DB thành object mảng cho Python dễ đọc
+    const usersWithEncodings = rows.map(u => ({
+      ...u,
+      face_encoding: typeof u.face_encoding === 'string' ? JSON.parse(u.face_encoding) : u.face_encoding
+    }))
+    res.json(usersWithEncodings)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// 2. Cập nhật khuôn mặt cho một User cụ thể
+app.patch('/api/users/:id/face', async (req, res) => {
+  try {
+    const { face_encoding } = req.body // Nhận mảng 128 số từ Python gửi lên
+    if (!face_encoding || !Array.isArray(face_encoding)) {
+      return res.status(400).json({ error: 'Dữ liệu khuôn mặt không hợp lệ' })
+    }
+
+    await query(
+      'UPDATE users SET face_encoding = ?, face_enrolled = 1 WHERE id = ?',
+      [JSON.stringify(face_encoding), req.params.id]
+    )
+    res.json({ ok: true, message: 'Đã lưu khuôn mặt thành công' })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 app.get('/api/users/:id', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM users WHERE id = ?', [req.params.id])
@@ -481,3 +516,4 @@ app.listen(PORT, () => {
     .then(() => console.log('✅ MySQL connected'))
     .catch(e => console.error('❌ MySQL error:', e.message))
 })
+
