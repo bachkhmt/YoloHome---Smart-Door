@@ -6,7 +6,7 @@ export default function SystemStats({ sysStats }) {
     { label: 'RAM',      value: sysStats.ram + '%',   color: 'var(--theme2)'  },
     { label: 'Mạng',     value: sysStats.net ? 'OK' : 'WEAK', color: sysStats.net ? 'var(--success)' : 'var(--warn)' },
     { label: 'Latency',  value: sysStats.latency + 'ms', color: 'var(--theme)' },
-    { label: 'Accuracy', value: '97.8%',              color: 'var(--success)' },
+    { label: 'Accuracy', value: '97.8%',              color: 'var(--success)' }, //hardcode
   ]
   return (
     <div className={styles.card}>

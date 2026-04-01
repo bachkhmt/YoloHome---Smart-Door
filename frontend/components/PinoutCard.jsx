@@ -18,7 +18,7 @@ export default function PinoutCard() {
       <div className={styles.hwBox}>
         <div className={styles.chipTitle}>ESP32 (YOLO:Bit v3)</div>
         {[
-          '📷 Camera OV2640 ——— I2C / DVP Bus',
+          '📷 Camera ESP32-CAM',
           '🎙️ Mic INMP441 ———— I2S (GPIO 25/26/27)',
           '🔒 Servo MG996R ——— PWM GPIO 12',
           '💡 LED WS2812B ——— GPIO 5 (NeoPixel)',

@@ -1,17 +1,59 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import styles from './css/CameraCard.module.css'
 
 export default function CameraCard({ camState, authProgress }) {
   const [mode, setMode] = useState('sim')
 
-  // Khi bấm "Camera thật", chúng ta chỉ cần chuyển mode để React render thẻ <img>
-  const handleEnableReal = useCallback(() => {
-    setMode('real')
+  // ── Refs cho webcam (chế độ giả lập) ──
+  const videoRef   = useRef(null)
+  const streamRef  = useRef(null)   // lưu MediaStream để stop sau này
+  const [camError, setCamError] = useState(null)
+
+  // Bật webcam
+  const startWebcam = useCallback(async () => {
+    setCamError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+    } catch (err) {
+      setCamError('Không thể truy cập webcam: ' + err.message)
+    }
   }, [])
 
-  const handleDisableReal = useCallback(() => {
-    setMode('sim')
+  // Tắt webcam khi rời chế độ sim
+  const stopWebcam = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
   }, [])
+
+  // Khởi động webcam khi vào chế độ sim, dừng khi rời
+  useEffect(() => {
+    if (mode === 'sim') {
+      startWebcam()
+    } else {
+      stopWebcam()
+    }
+    return () => {
+      if (mode === 'sim') stopWebcam()
+    }
+  }, [mode])
+
+  useEffect(() => {
+    if (mode === 'sim' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [mode])
+
+  const handleEnableReal = useCallback(() => setMode('real'),  [])
+  const handleDisableReal = useCallback(() => setMode('sim'), [])
 
   return (
     <div className={styles.card}>
@@ -29,24 +71,44 @@ export default function CameraCard({ camState, authProgress }) {
         </div>
       </div>
 
-      {/* ── GIẢ LẬP ── */}
+      {/* ── GIẢ LẬP — webcam máy tính ── */}
       {mode === 'sim' && (
         <>
-          <div className={styles.camBox}>
-            <div className={styles.scanline} />
-            <div className={styles.corners}>
-              <div className={`${styles.c} ${styles.tl}`}/><div className={`${styles.c} ${styles.tr}`}/>
-              <div className={`${styles.c} ${styles.bl}`}/><div className={`${styles.c} ${styles.br}`}/>
+          <div className={styles.realWrap}>
+            <div className={styles.videoWrap}>
+              {camError ? (
+                <div className={styles.videoOverlay} style={{ display: 'flex', color: 'var(--danger)', alignItems: 'center', justifyContent: 'center' }}>
+                  ❌ {camError}
+                </div>
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={styles.video}
+                  style={{ objectFit: 'cover', background: '#000' }}
+                />
+              )}
+
+              {/* Overlay trạng thái xác thực (SCANNING / GRANTED / DENIED) */}
+              <div style={{
+                position: 'absolute', bottom: '0.5rem', left: 0, right: 0,
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                pointerEvents: 'none',
+              }}>
+                <div className={styles.camLabel} style={{ color: camState.color }}>{camState.label}</div>
+                <div className={styles.camSub}>{camState.sub}</div>
+              </div>
+
+              <div className={styles.corners}>
+                <div className={`${styles.c} ${styles.tl}`}/><div className={`${styles.c} ${styles.tr}`}/>
+                <div className={`${styles.c} ${styles.bl}`}/><div className={`${styles.c} ${styles.br}`}/>
+              </div>
             </div>
-            {camState.showAvatar && (
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${camState.avatarSeed}&backgroundColor=0f0a1f`}
-                className={styles.avatar} alt="User"
-              />
-            )}
-            <div className={styles.camLabel} style={{ color: camState.color }}>{camState.label}</div>
-            <div className={styles.camSub}>{camState.sub}</div>
+            <div className={styles.liveTag}>🟢 WEBCAM</div>
           </div>
+
           {authProgress?.active && (
             <div className={styles.progWrap}>
               <div className={styles.progHd}>
@@ -61,31 +123,24 @@ export default function CameraCard({ camState, authProgress }) {
         </>
       )}
 
-      {/* ── CAMERA THẬT (ESP32-CAM thông qua Python Flask) ── */}
+      {/* ── CAMERA THẬT (ESP32-CAM qua Python Flask) ── */}
       {mode === 'real' && (
         <div className={styles.realWrap}>
           <div className={styles.videoWrap}>
-            {/* Lấy nguồn video từ trạm phát sóng Flask của Python ở port 5050.
-              Việc thêm query `?t=...` giúp tránh bị cache hình ảnh trên trình duyệt 
-            */}
-            <img 
-              src="http://localhost:5050/video_feed" 
-              className={styles.video} 
+            <img
+              src="http://localhost:5050/video_feed"
+              className={styles.video}
               alt="ESP32-CAM via Python"
               onError={(e) => {
-                // Tạm ẩn video và hiện thông báo lỗi để không gọi lại liên tục
-                e.target.style.display = 'none';
+                e.target.style.display = 'none'
                 if (e.target.nextSibling) {
-                  e.target.nextSibling.style.display = 'block';
+                  e.target.nextSibling.style.display = 'block'
                 }
               }}
             />
-            {/* Thông báo lỗi ẩn, chỉ hiện ra khi thẻ img bị lỗi (onError) */}
             <div className={styles.videoOverlay} style={{ display: 'none', color: 'var(--danger)' }}>
               ❌ Không thể kết nối luồng camera (Hãy kiểm tra Backend Python)
             </div>
-
-            {/* Góc khung trang trí */}
             <div className={styles.corners}>
               <div className={`${styles.c} ${styles.tl}`}/><div className={`${styles.c} ${styles.tr}`}/>
               <div className={`${styles.c} ${styles.bl}`}/><div className={`${styles.c} ${styles.br}`}/>

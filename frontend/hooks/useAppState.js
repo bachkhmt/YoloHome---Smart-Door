@@ -28,7 +28,7 @@ export function useAppState() {
   const [sensors,      setSensors]      = useState({ temp: 24.5, hum: 52, light: 310 })
   const [sysStats,     setSysStats]     = useState({ cpu: 0, ram: 0, net: true, latency: 0 })
   const [authProgress, setAuthProgress] = useState({ active: false, pct: 0, label: '' })
-  const [camState,     setCamState]     = useState({ label: 'READY', sub: 'Đang chờ...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
+  const [camState,     setCamState]     = useState({ label: 'READY', sub: '...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
   const [dbConnected,  setDbConnected]  = useState(false)
   const [loading,      setLoading]      = useState(true)  // khởi động lần đầu
   const [chartData,    setChartData]    = useState(null)  // dữ liệu biểu đồ từ DB
@@ -329,7 +329,7 @@ export function useAppState() {
       setTimeout(() => {
         setAuthProgress({ active: false, pct: 0, label: '' })
         setLedState('ready')
-        setCamState({ label: 'READY', sub: 'Đang chờ...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
+        setCamState({ label: 'READY', sub: '...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
       }, 2200)
     }, 1000)
   }, [busy, authMode, users, setDoor, writeLog, toast])
