@@ -7,8 +7,8 @@ log_level: INFO
 
 # Adafruit IO credentials (override with AIO_USERNAME / AIO_KEY env vars)
 adafruit:
-  username: "your_username"
-  aio_key: "your_aio_key"
+  username: "Bachk23_"
+  aio_key: "aio_UTmM48AaCrxUDUqfwu6KM368aW7I"
 
 # Camera (face recognition input)
 camera:

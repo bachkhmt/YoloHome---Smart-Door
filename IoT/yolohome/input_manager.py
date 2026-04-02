@@ -182,8 +182,23 @@ class InputManager:
         interval = 1.0 / self.config.camera.fps
         while self._running:
             elapsed = time.time() - start
-            frame = cam.capture_once(elapsed)
-            self.handle_camera_frame(frame)
+            
+            # --- ĐOẠN MỚI THÊM TRY...EXCEPT Ở ĐÂY ---
+            try:
+                frame = cam.capture_once(elapsed)
+                # Chỉ xử lý nếu frame hợp lệ (để phòng hờ trường hợp capture_once trả về None)
+                if frame is not None:
+                    self.handle_camera_frame(frame)
+            except RuntimeError as e:
+                logger.warning(f"Lỗi đọc camera (Mất kết nối?): {e}. Thử lại sau 1s...")
+                time.sleep(1.0)
+                continue
+            except Exception as e:
+                logger.error(f"Lỗi không xác định ở camera thread: {e}")
+                time.sleep(1.0)
+                continue
+            # ----------------------------------------
+            
             time.sleep(interval)
 
     def _run_microphone(self, mic):
