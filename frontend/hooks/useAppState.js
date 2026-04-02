@@ -1,6 +1,10 @@
 /**
- * useAppState.js — v3  (100% Database)
- * Mọi dữ liệu đều đọc/ghi MySQL. Không còn hardcode hay mock data.
+ * useAppState.js — v4
+ *
+ * Thay đổi chính so với v3:
+ *  - startAuth nhận `recognizeFace` (từ useFaceAuth) làm tham số
+ *  - Kết quả xác thực dựa trên nhận diện khuôn mặt thật, không còn Math.random()
+ *  - Nếu recognizeFace không được truyền vào → fallback về random (dev mode)
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
@@ -30,12 +34,12 @@ export function useAppState() {
   const [authProgress, setAuthProgress] = useState({ active: false, pct: 0, label: '' })
   const [camState,     setCamState]     = useState({ label: 'READY', sub: '...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
   const [dbConnected,  setDbConnected]  = useState(false)
-  const [loading,      setLoading]      = useState(true)  // khởi động lần đầu
-  const [chartData,    setChartData]    = useState(null)  // dữ liệu biểu đồ từ DB
+  const [loading,      setLoading]      = useState(true)
+  const [chartData,    setChartData]    = useState(null)
 
   const failWindowRef = useRef([])
   const uptimeStart   = useRef(Date.now())
-  const currentUser   = useRef(null) // user đang đăng nhập (dùng cho door/log)
+  const currentUser   = useRef(null)
 
   // ══════════════════════════════════════════════════════════════
   //  TOAST
@@ -52,7 +56,6 @@ export function useAppState() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        // Chạy song song để nhanh hơn
         const [
           usersRes,
           logsRes,
@@ -69,34 +72,23 @@ export function useAppState() {
           getWeeklyStats(),
         ])
 
-        // Users
         if (usersRes.status === 'fulfilled') {
           setUsers(usersRes.value.data)
           setDbConnected(true)
         }
-
-        // Logs
         if (logsRes.status === 'fulfilled') {
           setLogs(logsRes.value.data.map(normalizeLog))
         }
-
-        // Door state — đọc từ DB, không hardcode
         if (doorRes.status === 'fulfilled') {
           setLocked(Boolean(doorRes.value.data.locked))
         }
-
-        // Sensors — giá trị mới nhất từ DB
         if (sensorsRes.status === 'fulfilled' && sensorsRes.value.data) {
           const s = sensorsRes.value.data
           setSensors({ temp: s.temp, hum: s.hum, light: s.light })
         }
-
-        // Alerts chưa giải quyết
         if (alertsRes.status === 'fulfilled') {
           setAlerts(alertsRes.value.data)
         }
-
-        // Chart data từ view v_weekly_auth_stats
         if (chartRes.status === 'fulfilled') {
           setChartData(chartRes.value.data)
         }
@@ -122,7 +114,6 @@ export function useAppState() {
     if (!dbConnected) return
     const iv = setInterval(async () => {
       try {
-        // Làm mới logs, alerts, door state song song
         const [logsRes, alertsRes, doorRes] = await Promise.allSettled([
           getLogs(50),
           getAlerts(),
@@ -151,11 +142,9 @@ export function useAppState() {
           hum:   Math.round(jitter(prev.hum,   30, 90)),
           light: Math.round(jitter(prev.light,  0, 1000)),
         }
-        // Ghi vào DB (fire-and-forget)
         saveSensors({ ...next, device_id: 'yolobit-01' }).catch(() => {})
         return next
       })
-      // Giả lập system stats (CPU/RAM từ browser không lấy được thật)
       setSysStats({
         cpu:     Math.round(15 + Math.random() * 50),
         ram:     Math.round(35 + Math.random() * 35),
@@ -186,7 +175,7 @@ export function useAppState() {
   }, [toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  DOOR CONTROL — luôn ghi DB
+  //  DOOR CONTROL
   // ══════════════════════════════════════════════════════════════
   const setDoor = useCallback(async (unlock, source = 'dashboard') => {
     setLocked(!unlock)
@@ -200,7 +189,6 @@ export function useAppState() {
     setLedState('granted')
     await writeLog('Admin', 'Manual', 'Manual_mở', true)
     toast('inf', '🔓 Mở cửa thủ công')
-    // Ghi remote_control record
     sendCommand({ user_id: currentUser.current?.id || 4, command: 'unlock', source: 'dashboard' }).catch(() => {})
     setTimeout(() => setLedState('ready'), 2500)
   }, [setDoor, toast])
@@ -214,7 +202,7 @@ export function useAppState() {
   }, [setDoor, toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  WRITE LOG — ghi DB + cập nhật local state
+  //  WRITE LOG
   // ══════════════════════════════════════════════════════════════
   const writeLog = useCallback(async (userName, method, action, success, userId = null, failReason = null) => {
     const entry = normalizeLog({
@@ -225,9 +213,7 @@ export function useAppState() {
       latency_ms: Math.round(40 + Math.random() * 900),
       created_at: new Date().toISOString(),
     })
-    // Cập nhật UI ngay lập tức (optimistic update)
     setLogs(p => [entry, ...p].slice(0, 50))
-    // Ghi vào DB
     try {
       await apiAddLog({
         user_id:     userId,
@@ -241,8 +227,8 @@ export function useAppState() {
     } catch (_) {}
   }, [])
 
-// ══════════════════════════════════════════════════════════════
-  //  FR10 — SECURITY ALERT (DB-backed)
+  // ══════════════════════════════════════════════════════════════
+  //  SECURITY ALERT
   // ══════════════════════════════════════════════════════════════
   const resolveAlertById = useCallback(async (id) => {
     try {
@@ -254,88 +240,132 @@ export function useAppState() {
     }
   }, [toast])
 
-  // ---> THÊM HÀM MỚI VÀO ĐÂY <---
   const resolveAllAlerts = useCallback(async () => {
-    if (!alerts.length) return;
+    if (!alerts.length) return
     try {
-      // Chạy xử lý API song song cho tất cả alerts
-      await Promise.all(
-        alerts.map(a => apiResolveAlert(a.id, currentUser.current?.id || null))
-      );
-      // Xóa hết danh sách cảnh báo trên giao diện ngay lập tức
-      setAlerts([]);
-      toast('ok', `✅ Đã xử lý toàn bộ ${alerts.length} cảnh báo`);
+      await Promise.all(alerts.map(a => apiResolveAlert(a.id, currentUser.current?.id || null)))
+      setAlerts([])
+      toast('ok', `✅ Đã xử lý toàn bộ ${alerts.length} cảnh báo`)
     } catch (_) {
-      toast('err', '❌ Có lỗi khi xử lý danh sách cảnh báo');
+      toast('err', '❌ Có lỗi khi xử lý danh sách cảnh báo')
     }
-  }, [alerts, toast]);
+  }, [alerts, toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  AUTH FLOW
+  //  AUTH FLOW — tích hợp recognizeFace thật
+  //
+  //  Cách dùng tại component cha:
+  //    const { recognizeFace } = useFaceAuth()
+  //    const { startAuth } = useAppState()
+  //    <button onClick={() => startAuth(recognizeFace)}>Xác thực</button>
+  //
+  //  Nếu không truyền recognizeFace → fallback random (dev/demo mode)
   // ══════════════════════════════════════════════════════════════
-  const startAuth = useCallback(() => {
+  const startAuth = useCallback(async (recognizeFace = null) => {
     if (busy) return
     setBusy(true)
     setLedState('auth')
     setCamState({ label: 'SCANNING...', sub: 'Nhận diện sinh trắc học...', color: 'var(--warn)', showAvatar: false, avatarSeed: '' })
     setAuthProgress({ active: true, pct: 0, label: 'Nhận diện khuôn mặt...' })
 
+    // Animate progress bar trong khi chờ nhận diện
     let p = 0
     const ticker = setInterval(() => {
-      p = Math.min(100, p + 4)
-      setAuthProgress({ active: true, pct: p, label: p < 50 ? 'Nhận diện khuôn mặt...' : 'Phân tích giọng nói...' })
-      if (p >= 100) clearInterval(ticker)
-    }, 40)
+      p = Math.min(90, p + 5)   // dừng ở 90%, đợi kết quả thật
+      setAuthProgress({ active: true, pct: p, label: p < 50 ? 'Nhận diện khuôn mặt...' : 'Phân tích kết quả...' })
+    }, 60)
 
-    setTimeout(async () => {
+    try {
+      const method = [authMode.face ? 'Face' : '', authMode.voice ? 'Voice' : ''].filter(Boolean).join(',') || 'Face'
+
+      let faceResult = null
+
+      if (authMode.face && typeof recognizeFace === 'function') {
+        // ── NHẬN DIỆN THẬT (useFaceAuth) ──────────────────────────
+        faceResult = await recognizeFace()
+      } else if (authMode.face) {
+        // ── FALLBACK: random (dev mode khi chưa truyền recognizeFace) ──
+        const activeUsers = users.filter(u => u.online === 1 || u.online === true)
+        const randomOk    = Math.random() > 0.2
+        if (randomOk && activeUsers.length) {
+          const u = activeUsers[Math.floor(Math.random() * activeUsers.length)]
+          faceResult = { ok: true, user: { ...u, userId: u.id }, confidence: 85 }
+        } else {
+          faceResult = { ok: false, user: null, reason: 'Không khớp (dev mode)' }
+        }
+      } else {
+        // Face auth tắt → coi như pass
+        faceResult = { ok: true, user: null }
+      }
+
+      // Voice auth: vẫn giả lập (chưa có module voice thật)
+      const voiceOk = !authMode.voice || Math.random() > 0.25
+
       clearInterval(ticker)
       setAuthProgress({ active: true, pct: 100, label: 'Hoàn tất' })
 
-      const faceOk  = !authMode.face  || Math.random() > 0.2
-      const voiceOk = !authMode.voice || Math.random() > 0.25
-      const ok = faceOk && voiceOk
+      const ok = faceResult.ok && voiceOk
 
-      // Chỉ lấy user đang active (online=1 hoặc online=true)
-      const activeUsers = users.filter(u => u.online === 1 || u.online === true)
-      const user = ok && activeUsers.length
-        ? activeUsers[Math.floor(Math.random() * activeUsers.length)]
-        : null
+      if (ok && faceResult.user) {
+        // Khớp với user từ useFaceAuth — tìm record đầy đủ trong DB nếu có
+        const userId   = faceResult.user.userId ?? faceResult.user.id ?? null
+        const userName = faceResult.user.name ?? 'Người dùng'
+        const dbUser   = users.find(u => u.id === userId) || faceResult.user
+        const seed     = dbUser.seed || userName.replace(/\s+/g, '')
 
-      const method = [authMode.face ? 'Face' : '', authMode.voice ? 'Voice' : ''].filter(Boolean).join(',') || 'Face'
+        currentUser.current = dbUser
 
-      if (ok && user) {
-        currentUser.current = user
         setLedState('granted')
-        await setDoor(true, 'dashboard')
-        setCamState({ label: 'GRANTED ✓', sub: 'Xin chào, ' + user.name, color: 'var(--success)', showAvatar: true, avatarSeed: user.seed })
-        await writeLog(user.name, method, 'Vào', true, user.id)
-        toast('ok', '✅ Xác thực thành công — ' + user.name)
+        await setDoor(true, 'face_auth')
+        setCamState({
+          label: 'GRANTED ✓',
+          sub: `Xin chào, ${userName} (${faceResult.confidence ?? '—'}%)`,
+          color: 'var(--success)',
+          showAvatar: true,
+          avatarSeed: seed,
+        })
+        await writeLog(userName, method, 'Vào', true, userId)
+        toast('ok', `✅ Xác thực thành công — ${userName}`)
         failWindowRef.current = []
+
+      } else if (ok && !faceResult.user) {
+        // Face tắt + voice ok → mở nhưng không có thông tin user
+        setLedState('granted')
+        await setDoor(true, 'voice_auth')
+        setCamState({ label: 'GRANTED ✓', sub: 'Xác thực giọng nói', color: 'var(--success)', showAvatar: false, avatarSeed: '' })
+        await writeLog('Không xác định', method, 'Vào', true)
+        toast('ok', '✅ Xác thực giọng nói thành công')
+        failWindowRef.current = []
+
       } else {
+        // THẤT BẠI
         setLedState('denied')
-        const reason = !faceOk ? 'Không khớp khuôn mặt' : 'Không khớp giọng nói'
+        const reason = !faceResult.ok
+          ? (faceResult.reason || 'Không khớp khuôn mặt')
+          : 'Không khớp giọng nói'
         setCamState({ label: 'DENIED ✗', sub: reason, color: 'var(--danger)', showAvatar: false, avatarSeed: '' })
         await writeLog('Không xác định', method, 'Thử', false, null, reason)
-        toast('err', '❌ Từ chối truy cập')
+        toast('err', '❌ Từ chối truy cập — ' + reason)
 
-        // Đếm thất bại local (backend cũng tự kiểm tra)
         const now = Date.now()
         failWindowRef.current = failWindowRef.current.filter(t => now - t < 60000)
         failWindowRef.current.push(now)
-        // Sau khi ghi log, backend tự tạo alert → polling 10s sẽ load về
       }
-
+    } catch (e) {
+      clearInterval(ticker)
+      toast('err', '❌ Lỗi xác thực: ' + e.message)
+    } finally {
       setTimeout(() => setBusy(false), 500)
       setTimeout(() => {
         setAuthProgress({ active: false, pct: 0, label: '' })
         setLedState('ready')
         setCamState({ label: 'READY', sub: '...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
       }, 2200)
-    }, 1000)
+    }
   }, [busy, authMode, users, setDoor, writeLog, toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  USER MANAGEMENT — ghi DB
+  //  USER MANAGEMENT
   // ══════════════════════════════════════════════════════════════
   const addUserLocal = useCallback(async (name, role) => {
     if (!name.trim()) { toast('warn', '⚠️ Vui lòng nhập tên'); return false }
@@ -377,12 +407,23 @@ export function useAppState() {
 
   // ══════════════════════════════════════════════════════════════
   //  FR1 — AUTO TRIGGER (giả lập phát hiện người)
+  //  Lưu ý: auto trigger không truyền recognizeFace → chạy dev mode
+  //  Để auto trigger dùng nhận diện thật, truyền recognizeFaceFn vào setAutoRecognizeFace
   // ══════════════════════════════════════════════════════════════
+  const recognizeFaceFnRef = useRef(null)
+
+  /** Gọi hàm này ở component cha để kết nối auto trigger với useFaceAuth */
+  const setAutoRecognizeFace = useCallback((fn) => {
+    recognizeFaceFnRef.current = fn
+  }, [])
+
   useEffect(() => {
     const iv = setInterval(() => {
       if (!busy && Math.random() < 0.08) {
         toast('inf', '📡 Phát hiện người — tự động xác thực...')
-        setTimeout(() => { if (!busy) startAuth() }, 900)
+        setTimeout(() => {
+          if (!busy) startAuth(recognizeFaceFnRef.current)
+        }, 900)
       }
     }, 18000)
     return () => clearInterval(iv)
@@ -399,8 +440,7 @@ export function useAppState() {
     startAuth, manualUnlock, manualLock,
     addUserLocal, removeUser,
     toggleAuthMode, applyTheme,
-    resolveAlertById, toast, resolveAllAlerts
+    resolveAlertById, toast, resolveAllAlerts,
+    setAutoRecognizeFace,   // 👈 mới: kết nối auto trigger với recognizeFace thật
   }
 }
-
-

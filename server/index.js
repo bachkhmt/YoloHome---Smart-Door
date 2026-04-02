@@ -16,6 +16,30 @@ const PORT = process.env.PORT || 3001
 app.use(cors())
 app.use(express.json())
 
+// ══════════════════════════════════════════════════════════════════
+// ⚠️  SOCKET.IO (optional — uncomment nếu muốn real-time push)
+// ══════════════════════════════════════════════════════════════════
+/*
+import { createServer } from 'http'
+import { Server } from 'socket.io'
+ 
+const httpServer = createServer(app)
+const io = new Server(httpServer, { 
+  cors: { origin: '*' } 
+})
+ 
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id)
+})
+ 
+// Sau khi lưu DB, emit event:
+// io.emit('sensor:update', { temp, hum, light })
+// io.emit('log:new', { user_name, action, success })
+ 
+// Cuối file thay app.listen → httpServer.listen
+*/
+// ══════════════════════════════════════════════════════════════════
+
 // ── DB POOL ────────────────────────────────────────────────────────
 let pool = null
 
@@ -194,6 +218,7 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/logs', async (req, res) => {
   try {
     const { user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address } = req.body
+    console.log(`\n🚪 [BACKEND - LỊCH SỬ] Nhận thông báo: ${user_name} vừa ra vào bằng ${method || 'Face ID'}. Đang lưu vào MySQL...`);
     await query(
       `INSERT INTO access_logs
          (user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address)
@@ -316,6 +341,7 @@ app.get('/api/sensors/history', async (req, res) => {
 app.post('/api/sensors', async (req, res) => {
   try {
     const { temp, hum, light, device_id } = req.body
+    console.log(`🌡️ [BACKEND - SENSOR] Nhận dữ liệu môi trường mới: ${temp}°C, Độ ẩm: ${hum}%, Ánh sáng: ${light} lux. Đang lưu DB...`);
     await query(
       `INSERT INTO sensor_readings (temp, hum, light, device_id) VALUES (?, ?, ?, ?)`,
       [temp, hum, light, device_id || null]
@@ -365,6 +391,7 @@ app.get('/api/remote/pending', async (req, res) => {
 app.post('/api/remote', async (req, res) => {
   try {
     const { user_id, command, payload, device_target } = req.body
+    console.log(`⚡ [BACKEND - ĐIỀU KHIỂN] Nhận lệnh [${command}] từ Web gửi xuống thiết bị [${device_target}].`);
     if (!user_id || !command) return res.status(400).json({ error: 'Thiếu user_id hoặc command' })
     const result = await query(
       `INSERT INTO remote_controls (user_id, command, payload, device_target)
