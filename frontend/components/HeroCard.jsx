@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import styles from './css/HeroCard.module.css'
 
 const LED_MAP = {
@@ -17,6 +18,8 @@ function LedIndicator({ id, label, active, colorClass }) {
 }
 
 export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlock, manualLock }) {
+  const [authInProgress, setAuthInProgress] = useState(false)
+
   const statusMap = {
     locked:   { text: '● Đang Khóa',    cls: styles.pillLocked   },
     unlocked: { text: '● Đã Mở',        cls: styles.pillUnlocked },
@@ -24,11 +27,58 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
     granted:  { text: '● Truy Cập OK',  cls: styles.pillGranted  },
     denied:   { text: '● Từ Chối',      cls: styles.pillDenied   },
   }
+  
   const statusKey = ledState === 'auth' ? 'auth'
     : ledState === 'granted' ? 'granted'
     : ledState === 'denied'  ? 'denied'
     : locked ? 'locked' : 'unlocked'
   const status = statusMap[statusKey]
+
+  /**
+   * Kích hoạt xác thực khuôn mặt qua API.
+   * 
+   * Flow:
+   *   1. POST /api/auth/trigger
+   *   2. Node.js publish lên Adafruit yolohome.auth-trigger
+   *   3. Python nhận → mở camera → xác thực 1 lần → đóng camera
+   *   4. Kết quả trả về qua socket hoặc polling
+   */
+  const handleAuth = async () => {
+    if (authInProgress) {
+      console.warn('[AUTH] Đang xử lý request xác thực khác')
+      return
+    }
+
+    setAuthInProgress(true)
+
+    try {
+      console.log('[AUTH] 🔍 Gửi lệnh xác thực...')
+
+      const res = await fetch('/api/auth/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+
+      const data = await res.json()
+      console.log('[AUTH] ✅ Lệnh xác thực đã gửi:', data)
+
+      // Gọi callback của parent (nếu có logic thêm)
+      if (startAuth) {
+        startAuth()
+      }
+
+    } catch (error) {
+      console.error('[AUTH] ❌ Lỗi khi gửi lệnh xác thực:', error)
+      alert('Không thể kích hoạt xác thực. Vui lòng thử lại.')
+    } finally {
+      // Reset trạng thái sau 3s (hoặc đợi response từ socket)
+      setTimeout(() => setAuthInProgress(false), 3000)
+    }
+  }
 
   return (
     <div className={styles.hero}>
@@ -51,8 +101,12 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
         </div>
       </div>
       <div className={styles.right}>
-        <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={startAuth} disabled={busy}>
-          {busy ? '⏳ Đang xác thực...' : '🔍 Xác Thực'}
+        <button 
+          className={`${styles.btn} ${styles.btnPrimary}`} 
+          onClick={handleAuth} 
+          disabled={busy || authInProgress}
+        >
+          {authInProgress ? '⏳ Đang xác thực...' : busy ? '⏳ Đang xử lý...' : '🔍 Xác Thực'}
         </button>
         <button className={`${styles.btn} ${styles.btnSuccess}`} onClick={manualUnlock}>🔓 Mở</button>
         <button className={`${styles.btn} ${styles.btnDanger}`}  onClick={manualLock}>🔒 Khóa</button>

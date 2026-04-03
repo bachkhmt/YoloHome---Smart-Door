@@ -7,11 +7,18 @@ import express from 'express'
 import mysql   from 'mysql2/promise'
 import cors    from 'cors'
 import dotenv  from 'dotenv'
+import axios   from 'axios'
 
 dotenv.config()
 
 const app  = express()
 const PORT = process.env.PORT || 3001
+
+// Adafruit IO config (cho auth trigger)
+const ADAFRUIT_USERNAME = process.env.ADAFRUIT_USERNAME
+const ADAFRUIT_KEY      = process.env.ADAFRUIT_KEY
+const ADAFRUIT_API      = 'https://io.adafruit.com/api/v2'
+const AUTH_FEED         = 'yolohome.auth-trigger'
 
 app.use(cors())
 app.use(express.json())
@@ -341,7 +348,7 @@ app.get('/api/sensors/history', async (req, res) => {
 app.post('/api/sensors', async (req, res) => {
   try {
     const { temp, hum, light, device_id } = req.body
-    console.log(`🌡️ [BACKEND - SENSOR] Nhận dữ liệu môi trường mới: ${temp}°C, Độ ẩm: ${hum}%, Ánh sáng: ${light} lux. Đang lưu DB...`);
+    // console.log(`🌡️ [BACKEND - SENSOR] Nhận dữ liệu môi trường mới: ${temp}°C, Độ ẩm: ${hum}%, Ánh sáng: ${light} lux. Đang lưu DB...`);
     await query(
       `INSERT INTO sensor_readings (temp, hum, light, device_id) VALUES (?, ?, ?, ?)`,
       [temp, hum, light, device_id || null]
@@ -535,6 +542,42 @@ app.get('/api/chart/weekly', async (req, res) => {
 })
 
 // ══════════════════════════════════════════════════════════════════
+//  AUTH TRIGGER — React UI bấm nút → publish Adafruit → Python detect ngay
+// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  AUTH TRIGGER — Nhận lệnh ưu tiên từ React UI và đẩy lên Adafruit
+// ══════════════════════════════════════════════════════════════════
+app.post('/api/auth/trigger', async (req, res) => {
+  try {
+    const ADAFRUIT_USERNAME = process.env.ADAFRUIT_USERNAME;
+    const ADAFRUIT_KEY      = process.env.ADAFRUIT_KEY;
+    const AUTH_FEED         = 'yolohome.auth-trigger'; // Đảm bảo Feed này đã được tạo trên Adafruit
+
+    if (!ADAFRUIT_USERNAME || !ADAFRUIT_KEY) {
+      return res.status(500).json({ error: 'Thiếu cấu hình ADAFRUIT trong .env' });
+    }
+
+    const timestamp = Date.now();
+    console.log(`\n🔍 [AUTH TRIGGER] UI yêu cầu xác thực ưu tiên (ts=${timestamp})`);
+
+    // Bắn tín hiệu lên Adafruit IO
+    await axios.post(
+      `https://io.adafruit.com/api/v2/${ADAFRUIT_USERNAME}/feeds/${AUTH_FEED}/data`,
+      { value: timestamp.toString() },
+      {
+        headers: { 'X-AIO-Key': ADAFRUIT_KEY, 'Content-Type': 'application/json' },
+        timeout: 5000,
+      }
+    );
+
+    res.json({ success: true, message: 'Đã gửi lệnh ưu tiên cho Camera' });
+  } catch (e) {
+    console.error('[AUTH TRIGGER] ❌ Lỗi:', e.message);
+    res.status(500).json({ error: 'Lỗi kết nối tới Broker' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
 //  START
 // ══════════════════════════════════════════════════════════════════
 app.listen(PORT, () => {
@@ -543,4 +586,3 @@ app.listen(PORT, () => {
     .then(() => console.log('✅ MySQL connected'))
     .catch(e => console.error('❌ MySQL error:', e.message))
 })
-
