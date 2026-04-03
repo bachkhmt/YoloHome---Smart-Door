@@ -1,10 +1,10 @@
 /**
- * useAppState.js — v4
+ * useAppState.js — v5
  *
- * Thay đổi chính so với v3:
- *  - startAuth nhận `recognizeFace` (từ useFaceAuth) làm tham số
- *  - Kết quả xác thực dựa trên nhận diện khuôn mặt thật, không còn Math.random()
- *  - Nếu recognizeFace không được truyền vào → fallback về random (dev mode)
+ * Thay đổi chính so với v4:
+ *  - BỎ dữ liệu giả lập sensors (interval jitter)
+ *  - Tích hợp useAdafruitMqtt để nhận dữ liệu real-time từ Adafruit feeds
+ *  - Sensors được cập nhật từ MQTT, không còn random
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
@@ -16,8 +16,12 @@ import {
   sendCommand,
   getWeeklyStats,
 } from '../lib/api'
+import useAdafruitMqtt from '../hooks/useAdafruitMqtt'
 
 export function useAppState() {
+  // ── ADAFRUIT MQTT — Dữ liệu real-time từ feeds ──────────────────
+  const { sensorData, latestFace, doorState: mqttDoorState } = useAdafruitMqtt()
+
   // ── Core state ──────────────────────────────────────────────────
   const [locked,       setLocked]       = useState(true)
   const [busy,         setBusy]         = useState(false)
@@ -40,6 +44,38 @@ export function useAppState() {
   const failWindowRef = useRef([])
   const uptimeStart   = useRef(Date.now())
   const currentUser   = useRef(null)
+
+  // ══════════════════════════════════════════════════════════════
+  //  CẬP NHẬT SENSORS TỪ ADAFRUIT MQTT
+  // ══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (sensorData) {
+      setSensors({
+        temp:  sensorData.temp  ?? sensors.temp,
+        hum:   sensorData.hum   ?? sensors.hum,
+        light: sensorData.light ?? sensors.light,
+      })
+      // Tùy chọn: Lưu vào DB mỗi khi có dữ liệu mới
+      saveSensors({ 
+        temp: sensorData.temp, 
+        hum: sensorData.hum, 
+        light: sensorData.light, 
+        device_id: 'yolobit-01' 
+      }).catch(() => {})
+    }
+  }, [sensorData]) // eslint-disable-line
+
+  // ══════════════════════════════════════════════════════════════
+  //  ĐỒNG BỘ DOOR STATE TỪ MQTT
+  // ══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (mqttDoorState !== undefined && mqttDoorState !== null) {
+      // mqttDoorState có thể là "locked" hoặc "unlocked" (string)
+      // hoặc true/false (boolean)
+      const isLocked = mqttDoorState === 'locked' || mqttDoorState === true
+      setLocked(isLocked)
+    }
+  }, [mqttDoorState])
 
   // ══════════════════════════════════════════════════════════════
   //  TOAST
@@ -94,7 +130,7 @@ export function useAppState() {
         }
 
         if (usersRes.status === 'fulfilled') {
-          toast('ok', '🏠 YOLO Home — Đã kết nối MySQL')
+          toast('ok', '🏠 YOLO Home — Đã kết nối MySQL + Adafruit MQTT')
         } else {
           toast('warn', '⚠️ Chạy ở Local Mode — không có DB')
         }
@@ -131,20 +167,10 @@ export function useAppState() {
   }, [dbConnected])
 
   // ══════════════════════════════════════════════════════════════
-  //  SENSORS — Giả lập biến động + ghi vào DB mỗi 5 giây
+  //  SYSTEM STATS — Giả lập CPU/RAM (không liên quan đến sensors)
   // ══════════════════════════════════════════════════════════════
   useEffect(() => {
-    const jitter = (v, lo, hi) => Math.min(hi, Math.max(lo, v + (Math.random() - 0.5) * 2))
     const iv = setInterval(() => {
-      setSensors(prev => {
-        const next = {
-          temp:  parseFloat(jitter(prev.temp,  18, 36).toFixed(1)),
-          hum:   Math.round(jitter(prev.hum,   30, 90)),
-          light: Math.round(jitter(prev.light,  0, 1000)),
-        }
-        saveSensors({ ...next, device_id: 'yolobit-01' }).catch(() => {})
-        return next
-      })
       setSysStats({
         cpu:     Math.round(15 + Math.random() * 50),
         ram:     Math.round(35 + Math.random() * 35),
@@ -204,31 +230,35 @@ export function useAppState() {
   // ══════════════════════════════════════════════════════════════
   //  WRITE LOG
   // ══════════════════════════════════════════════════════════════
-  const writeLog = useCallback(async (userName, method, action, success, userId = null, failReason = null) => {
-    const entry = normalizeLog({
-      user_name:  userName,
+  const writeLog = useCallback(async (user, method, event, success, userId = null, failReason = '') => {
+    const latency = Math.round(10 + Math.random() * 60)
+    const newLog = {
+      user,
       method,
-      action,
+      event,
       success,
-      latency_ms: Math.round(40 + Math.random() * 900),
-      created_at: new Date().toISOString(),
-    })
-    setLogs(p => [entry, ...p].slice(0, 50))
-    try {
-      await apiAddLog({
-        user_id:     userId,
-        user_name:   userName,
-        method,
-        action,
-        success,
-        fail_reason: failReason,
-        latency_ms:  entry.latency_ms,
-      })
-    } catch (_) {}
-  }, [])
+      latency: latency + 'ms',
+      time: new Date(),
+    }
+    setLogs(p => [newLog, ...p].slice(0, 50))
+
+    if (dbConnected) {
+      try {
+        await apiAddLog({ 
+          user_name: user, 
+          method, 
+          event, 
+          success, 
+          latency_ms: latency,
+          user_id: userId,
+          fail_reason: failReason || null,
+        })
+      } catch (_) {}
+    }
+  }, [dbConnected])
 
   // ══════════════════════════════════════════════════════════════
-  //  SECURITY ALERT
+  //  ALERTS
   // ══════════════════════════════════════════════════════════════
   const resolveAlertById = useCallback(async (id) => {
     try {
@@ -442,5 +472,7 @@ export function useAppState() {
     toggleAuthMode, applyTheme,
     resolveAlertById, toast, resolveAllAlerts,
     setAutoRecognizeFace,   // 👈 mới: kết nối auto trigger với recognizeFace thật
+    // MQTT data (có thể expose nếu cần dùng ở component khác)
+    latestFace,             // 👈 thông tin người vừa nhận diện từ MQTT
   }
 }
