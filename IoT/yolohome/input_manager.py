@@ -277,7 +277,7 @@ class InputManager:
         self._gateway = gateway
         if hasattr(gateway, 'set_auth_callback'):
             gateway.set_auth_callback(self.request_face_auth)
-            logger.info("✅ Đã móc nối tín hiệu Auth On-Demand với Gateway.")
+            logger.info("Đã móc nối tín hiệu Auth On-Demand với Gateway.")
 
     def on_event(self, handler: Callable[[ParsedEvent], None]):
         self._event_handlers.append(handler)
@@ -356,7 +356,7 @@ class InputManager:
         )
 
     def _run_camera(self, cam):
-        logger.info("📷 Luồng Camera đã bật (Đọc liên tục, AI chạy nền không block)")
+        logger.info("📷 Luồng Camera đã bật")
         
         auto_interval = 3.0 
         last_ai_time = time.time()

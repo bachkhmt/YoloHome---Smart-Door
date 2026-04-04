@@ -1,5 +1,11 @@
 """
-YOLO Home — run.py
+YOLO Home — run.py (FIXED)
+
+THAY ĐỔI:
+  - XÓA logic điều khiển ESP32-CAM trong handle_mqtt_command
+  - Logic điều khiển hardware đã được chuyển vào gateway.py
+  - File này chỉ còn khởi tạo và chạy các module chính
+
 Đặt vào: YOLOHOME/ (cùng cấp với run.sh, pyproject.toml)
 Chạy: python run.py
 Yêu cầu Node server chạy trước: cd server && node index.js
@@ -19,23 +25,6 @@ def main():
 
     gateway = BridgeGateway(config)
     gateway.start()
-
-    # --- ĐOẠN CẦN THÊM VÀO ĐÂY ---
-    def handle_mqtt_command(update):
-        # Hàm này sẽ chạy khi có dữ liệu mới từ Adafruit
-        command = str(update.value).upper()
-        logger.info(f"==> NHẬN LỆNH TỪ ADAFRUIT: {command}")
-        
-        if command == "UNLOCK":
-            logger.info("🔓 Đang thực hiện mở khóa...")
-            # Thêm code điều khiển phần cứng của bạn ở đây
-        elif command == "LOCK":
-            logger.info("🔒 Đang thực hiện khóa...")
-            # Thêm code điều khiển phần cứng của bạn ở đây
-
-    # Đăng kí lắng nghe kênh door-lock
-    gateway.on_door_command(handle_mqtt_command)
-    # ----------------------------------------------------
 
     manager = InputManager(config)
     manager.set_gateway(gateway)

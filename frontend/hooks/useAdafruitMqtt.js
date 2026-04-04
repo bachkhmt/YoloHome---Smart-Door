@@ -4,56 +4,42 @@
  * Custom Hook để kết nối MQTT với Adafruit IO
  * Nhận dữ liệu real-time từ các feed:
  *  - Sensors: temp, hum, light
- *  - Door state: locked/unlocked
+ *  - Door state: locked/unlocked  ← Python publish sau khi thực hiện lệnh
  *  - Face detection: label, confidence
  */
 
 import { useState, useEffect, useRef } from 'react';
 
-// ══════════════════════════════════════════════════════════════
-//  CẤU HÌNH ADAFRUIT IO - Thay đổi theo tài khoản của bạn
-// ══════════════════════════════════════════════════════════════
 const ADAFRUIT_CONFIG = {
-  username: 'Bachk23_',  // 👈 Thay bằng username của bạn
-  key: 'aio_IaJW43vyweEQJnVKgszxrmhkdZ2D',                 // 👈 Thay bằng AIO Key của bạn
-  
-  // Tên các feed trên Adafruit IO
+  username: 'Bachk23_',
+  key: 'aio_IaJW43vyweEQJnVKgszxrmhkdZ2D',
   feeds: {
-    temp:  "yolohome.temperature",
-    light:        "yolohome.light",
-    humidity:       "yolohome.humidity",
-    face:         "yolohome.face-detected",
-    door:    "yolohome.door-lock",
+    temp:     "yolohome.temperature",
+    light:    "yolohome.light",
+    humidity: "yolohome.humidity",
+    face:     "yolohome.face-detected",
+    door:     "yolohome.door-lock",
   }
 };
 
 export default function useAdafruitMqtt() {
-  // ── State ──────────────────────────────────────────────────
-  const [sensorData, setSensorData] = useState({
-    temp: 24.5,
-    hum: 52,
-    light: 310,
-  });
+  const [sensorData, setSensorData] = useState({ temp: 24.5, hum: 52, light: 310 });
   const [latestFace, setLatestFace] = useState(null);
-  const [doorState, setDoorState] = useState('locked');
-  const [connected, setConnected] = useState(false);
+  const [doorState, setDoorState]   = useState(null);  // null = chưa nhận từ Adafruit
+  const [connected, setConnected]   = useState(false);
 
   const clientRef = useRef(null);
 
-  // ══════════════════════════════════════════════════════════════
-  //  KẾT NỐI MQTT VỚI ADAFRUIT IO
-  // ══════════════════════════════════════════════════════════════
   useEffect(() => {
-    // Kiểm tra cấu hình
-    if (ADAFRUIT_CONFIG.username === 'Bachk23_' || 
-        ADAFRUIT_CONFIG.key === 'aio_IaJW43vyweEQJnVKgszxrmhkdZ2D') {
+    // Không check cứng credentials — chỉ cần có giá trị là kết nối
+    if (!ADAFRUIT_CONFIG.username || !ADAFRUIT_CONFIG.key) {
       console.warn('⚠️ Chưa cấu hình Adafruit IO credentials trong useAdafruitMqtt.js');
       return;
     }
 
-    // Import MQTT client (cần cài: npm install mqtt)
     import('mqtt').then((mqtt) => {
-      const brokerUrl = `wss://io.adafruit.com:443`;
+      // path /mqtt bắt buộc với Adafruit IO WebSocket
+      const brokerUrl = `wss://io.adafruit.com:443/mqtt`;
       const options = {
         username: ADAFRUIT_CONFIG.username,
         password: ADAFRUIT_CONFIG.key,
@@ -66,12 +52,10 @@ export default function useAdafruitMqtt() {
       const client = mqtt.connect(brokerUrl, options);
       clientRef.current = client;
 
-      // ── Khi kết nối thành công ──────────────────────────────
       client.on('connect', () => {
         console.log('✅ Đã kết nối Adafruit MQTT');
         setConnected(true);
 
-        // Subscribe tất cả các feed
         const { username, feeds } = ADAFRUIT_CONFIG;
         client.subscribe(`${username}/feeds/${feeds.temp}`);
         client.subscribe(`${username}/feeds/${feeds.humidity}`);
@@ -82,50 +66,43 @@ export default function useAdafruitMqtt() {
         console.log('📡 Đã subscribe các feed:', Object.values(feeds));
       });
 
-      // ── Nhận message từ các feed ────────────────────────────
       client.on('message', (topic, message) => {
         try {
           const payload = message.toString();
-          
-          // Xác định feed nào gửi data
+          const { feeds } = ADAFRUIT_CONFIG;
+
           if (topic.includes(feeds.temp)) {
-            const temp = parseFloat(payload);
-            setSensorData(prev => ({ ...prev, temp }));
-            console.log('🌡️ Nhiệt độ:', temp);
-          } 
+            setSensorData(prev => ({ ...prev, temp: parseFloat(payload) }));
+            console.log('🌡️ Nhiệt độ:', payload);
+          }
           else if (topic.includes(feeds.humidity)) {
-            const hum = parseFloat(payload);
-            setSensorData(prev => ({ ...prev, hum }));
-            console.log('💧 Độ ẩm:', hum);
-          } 
+            setSensorData(prev => ({ ...prev, hum: parseFloat(payload) }));
+            console.log('💧 Độ ẩm:', payload);
+          }
           else if (topic.includes(feeds.light)) {
-            const light = parseFloat(payload);
-            setSensorData(prev => ({ ...prev, light }));
-            console.log('💡 Ánh sáng:', light);
-          } 
+            setSensorData(prev => ({ ...prev, light: parseFloat(payload) }));
+            console.log('💡 Ánh sáng:', payload);
+          }
           else if (topic.includes(feeds.door)) {
+            // Python publish "UNLOCK" hoặc "LOCK" sau khi thực hiện lệnh thật
+            console.log('🚪 [MQTT] Nhận door state từ Adafruit:', payload);
             setDoorState(payload);
-            console.log('🚪 Cửa:', payload);
-          } 
+          }
           else if (topic.includes(feeds.face)) {
-            // Payload có thể là JSON: {"label": "John", "confidence": 0.95}
             try {
-              const faceData = JSON.parse(payload);
-              setLatestFace(faceData);
-              console.log('👤 Nhận diện:', faceData);
+              setLatestFace(JSON.parse(payload));
             } catch {
-              // Nếu không phải JSON, coi như là tên người
               setLatestFace({ label: payload, confidence: null });
             }
+            console.log('👤 Nhận diện:', payload);
           }
         } catch (err) {
           console.error('❌ Lỗi parse MQTT message:', err);
         }
       });
 
-      // ── Xử lý lỗi ───────────────────────────────────────────
       client.on('error', (err) => {
-        console.error('❌ MQTT Error:', err);
+        console.error('❌ MQTT Error:', err.message);
         setConnected(false);
       });
 
@@ -143,7 +120,6 @@ export default function useAdafruitMqtt() {
       console.log('💡 Chạy: npm install mqtt');
     });
 
-    // Cleanup khi unmount
     return () => {
       if (clientRef.current) {
         clientRef.current.end();
@@ -152,9 +128,6 @@ export default function useAdafruitMqtt() {
     };
   }, []);
 
-  // ══════════════════════════════════════════════════════════════
-  //  PUBLISH DATA LÊN ADAFRUIT (tùy chọn)
-  // ══════════════════════════════════════════════════════════════
   const publishDoorState = (state) => {
     if (clientRef.current && connected) {
       const topic = `${ADAFRUIT_CONFIG.username}/feeds/${ADAFRUIT_CONFIG.feeds.door}`;
@@ -163,11 +136,5 @@ export default function useAdafruitMqtt() {
     }
   };
 
-  return {
-    sensorData,
-    latestFace,
-    doorState,
-    connected,
-    publishDoorState, // Hàm publish (nếu cần điều khiển từ frontend)
-  };
+  return { sensorData, latestFace, doorState, connected, publishDoorState };
 }

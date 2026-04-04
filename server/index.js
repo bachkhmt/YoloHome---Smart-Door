@@ -225,7 +225,7 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/logs', async (req, res) => {
   try {
     const { user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address } = req.body
-    console.log(`\n🚪 [BACKEND - LỊCH SỬ] Nhận thông báo: ${user_name} vừa ra vào bằng ${method || 'Face ID'}. Đang lưu vào MySQL...`);
+    console.log(`\n[BACKEND - LỊCH SỬ] Nhận thông báo: ${user_name} vừa ra vào bằng ${method || 'Face ID'}. Đang lưu vào MySQL...`);
     await query(
       `INSERT INTO access_logs
          (user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address)
@@ -310,6 +310,76 @@ app.get('/api/door/history', async (req, res) => {
     )
     res.json(rows)
   } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── Helper: publish lên Adafruit IO feed ──────────────────────────
+async function publishToAdafruit(feedKey, value) {
+  const username = process.env.ADAFRUIT_USERNAME
+  const key      = process.env.ADAFRUIT_KEY
+  if (!username || !key) throw new Error('Thiếu ADAFRUIT_USERNAME hoặc ADAFRUIT_KEY trong .env')
+  await axios.post(
+    `https://io.adafruit.com/api/v2/${username}/feeds/${feedKey}/data`,
+    { value: String(value) },
+    { headers: { 'X-AIO-Key': key, 'Content-Type': 'application/json' }, timeout: 5000 }
+  )
+}
+
+// ── POST /api/door/unlock ──────────────────────────────────────────
+// HeroCard gọi khi ấn nút 🔓 Mở
+app.post('/api/door/unlock', async (req, res) => {
+  try {
+    console.log('\n🔓 [DOOR] Nhận lệnh MỞ KHÓA từ Dashboard')
+
+    // 1. Publish lên Adafruit → Python nhận qua MQTT → điều khiển hardware
+    await publishToAdafruit('yolohome.door-lock', 'UNLOCK')
+    console.log('📤 [DOOR] Đã publish UNLOCK → Adafruit yolohome.door-lock')
+
+    // 2. Lưu trạng thái vào DB
+    await query(
+      `INSERT INTO door_state (locked, source) VALUES (0, 'dashboard')`,
+    )
+
+    // 3. Ghi access log
+    await query(
+      `INSERT INTO access_logs (user_name, method, action, success)
+       VALUES ('Dashboard', 'Manual', 'door_unlock', 1)`
+    )
+    console.log('📝 [DOOR] Đã ghi log: door_unlock')
+
+    res.json({ ok: true, message: 'Đã gửi lệnh mở khóa' })
+  } catch (e) {
+    console.error('[DOOR UNLOCK] ❌ Lỗi:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── POST /api/door/lock ────────────────────────────────────────────
+// HeroCard gọi khi ấn nút 🔒 Khóa
+app.post('/api/door/lock', async (req, res) => {
+  try {
+    console.log('\n🔒 [DOOR] Nhận lệnh KHÓA CỬA từ Dashboard')
+
+    // 1. Publish lên Adafruit → Python nhận qua MQTT → điều khiển hardware
+    await publishToAdafruit('yolohome.door-lock', 'LOCK')
+    console.log('📤 [DOOR] Đã publish LOCK → Adafruit yolohome.door-lock')
+
+    // 2. Lưu trạng thái vào DB
+    await query(
+      `INSERT INTO door_state (locked, source) VALUES (1, 'dashboard')`,
+    )
+
+    // 3. Ghi access log
+    await query(
+      `INSERT INTO access_logs (user_name, method, action, success)
+       VALUES ('Dashboard', 'Manual', 'door_lock', 1)`
+    )
+    console.log('📝 [DOOR] Đã ghi log: door_lock')
+
+    res.json({ ok: true, message: 'Đã gửi lệnh khóa cửa' })
+  } catch (e) {
+    console.error('[DOOR LOCK] ❌ Lỗi:', e.message)
     res.status(500).json({ error: e.message })
   }
 })

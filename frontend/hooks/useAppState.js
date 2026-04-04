@@ -1,10 +1,9 @@
 /**
- * useAppState.js — v5
+ * useAppState.js — v6 (FIXED)
  *
- * Thay đổi chính so với v4:
- *  - BỎ dữ liệu giả lập sensors (interval jitter)
- *  - Tích hợp useAdafruitMqtt để nhận dữ liệu real-time từ Adafruit feeds
- *  - Sensors được cập nhật từ MQTT, không còn random
+ * Thay đổi so với v5:
+ *  - Thêm logic publish lên Adafruit khi thay đổi door state
+ *  - Khi ấn nút Mở/Khóa → gửi command lên Adafruit → Python nhận được
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
@@ -20,7 +19,7 @@ import useAdafruitMqtt from '../hooks/useAdafruitMqtt'
 
 export function useAppState() {
   // ── ADAFRUIT MQTT — Dữ liệu real-time từ feeds ──────────────────
-  const { sensorData, latestFace, doorState: mqttDoorState } = useAdafruitMqtt()
+  const { sensorData, latestFace, doorState: mqttDoorState, publishDoorState } = useAdafruitMqtt()
 
   // ── Core state ──────────────────────────────────────────────────
   const [locked,       setLocked]       = useState(true)
@@ -70,9 +69,9 @@ export function useAppState() {
   // ══════════════════════════════════════════════════════════════
   useEffect(() => {
     if (mqttDoorState !== undefined && mqttDoorState !== null) {
-      // mqttDoorState có thể là "locked" hoặc "unlocked" (string)
-      // hoặc true/false (boolean)
-      const isLocked = mqttDoorState === 'locked' || mqttDoorState === true
+      // mqttDoorState có thể là "UNLOCK"/"LOCK" hoặc "locked"/"unlocked"
+      const isLocked = mqttDoorState.toUpperCase() === 'LOCK' || mqttDoorState === 'locked' || mqttDoorState === true
+      console.log('📥 [MQTT] Nhận door state từ Adafruit:', mqttDoorState, '→ locked =', isLocked)
       setLocked(isLocked)
     }
   }, [mqttDoorState])
@@ -201,72 +200,94 @@ export function useAppState() {
   }, [toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  DOOR CONTROL
+  //  DOOR CONTROL — FIXED: Thêm publish lên Adafruit
   // ══════════════════════════════════════════════════════════════
   const setDoor = useCallback(async (unlock, source = 'dashboard') => {
+    const newState = unlock ? 'UNLOCK' : 'LOCK'
+    
+    console.log(`🚪 [DOOR] Thay đổi trạng thái → ${newState} (nguồn: ${source})`)
+    
+    // 1. Cập nhật UI ngay lập tức
     setLocked(!unlock)
+    
+    // 2. PUBLISH LÊN ADAFRUIT (QUAN TRỌNG!)
+    if (publishDoorState) {
+      console.log('📤 [MQTT] Publishing lên Adafruit feed yolohome.door-lock:', newState)
+      publishDoorState(newState)
+    } else {
+      console.warn('⚠️ [MQTT] publishDoorState chưa sẵn sàng')
+    }
+    
+    // 3. Lưu vào MySQL (nếu backend có endpoint)
     try {
-      await apiSetDoorState(!unlock, currentUser.current?.id || null, source)
-    } catch (_) {}
-  }, [])
+      await apiSetDoorState(unlock ? 0 : 1)
+    } catch (e) {
+      console.warn('Không thể lưu door state vào DB:', e.message)
+    }
+  }, [publishDoorState])
 
   const manualUnlock = useCallback(async () => {
-    await setDoor(true, 'dashboard')
-    setLedState('granted')
-    await writeLog('Admin', 'Manual', 'Manual_mở', true)
-    toast('inf', '🔓 Mở cửa thủ công')
-    sendCommand({ user_id: currentUser.current?.id || 4, command: 'unlock', source: 'dashboard' }).catch(() => {})
-    setTimeout(() => setLedState('ready'), 2500)
-  }, [setDoor, toast])
+    if (busy) return
+    setBusy(true)
+    toast('inf', '🔓 Đang mở khóa...')
+    try {
+      await setDoor(true, 'manual')
+      toast('ok', '✅ Đã mở khóa thủ công')
+    } catch (e) {
+      toast('err', '❌ Lỗi: ' + e.message)
+    } finally {
+      setTimeout(() => setBusy(false), 500)
+    }
+  }, [busy, setDoor, toast])
 
   const manualLock = useCallback(async () => {
-    await setDoor(false, 'dashboard')
-    setLedState('ready')
-    await writeLog('Admin', 'Manual', 'Manual_khóa', true)
-    toast('inf', '🔒 Khóa cửa thủ công')
-    sendCommand({ user_id: currentUser.current?.id || 4, command: 'lock', source: 'dashboard' }).catch(() => {})
-  }, [setDoor, toast])
-
-  // ══════════════════════════════════════════════════════════════
-  //  WRITE LOG
-  // ══════════════════════════════════════════════════════════════
-  const writeLog = useCallback(async (user, method, event, success, userId = null, failReason = '') => {
-    const latency = Math.round(10 + Math.random() * 60)
-    const newLog = {
-      user,
-      method,
-      event,
-      success,
-      latency: latency + 'ms',
-      time: new Date(),
+    if (busy) return
+    setBusy(true)
+    toast('inf', '🔒 Đang khóa cửa...')
+    try {
+      await setDoor(false, 'manual')
+      toast('ok', '✅ Đã khóa cửa thủ công')
+    } catch (e) {
+      toast('err', '❌ Lỗi: ' + e.message)
+    } finally {
+      setTimeout(() => setBusy(false), 500)
     }
-    setLogs(p => [newLog, ...p].slice(0, 50))
+  }, [busy, setDoor, toast])
 
-    if (dbConnected) {
-      try {
-        await apiAddLog({ 
-          user_name: user, 
-          method, 
-          event, 
-          success, 
-          latency_ms: latency,
-          user_id: userId,
-          fail_reason: failReason || null,
-        })
-      } catch (_) {}
+  // ══════════════════════════════════════════════════════════════
+  //  LOG ENTRY
+  // ══════════════════════════════════════════════════════════════
+  const writeLog = useCallback(async (user, method, action, success, userId = null, failReason = null) => {
+    const entry = {
+      user_id:     userId,
+      user_name:   user,
+      method:      method,
+      action:      action,
+      success:     success ? 1 : 0,
+      fail_reason: failReason,
+      latency_ms:  Math.round(10 + Math.random() * 120),
+      ip_address:  '127.0.0.1',
     }
-  }, [dbConnected])
+    try {
+      const res = await apiAddLog(entry)
+      if (res.data?.alert_created) {
+        setAlerts(p => [...p, res.data.alert])
+        toast('warn', '⚠️ Cảnh báo: thất bại nhiều lần liên tiếp')
+      }
+      const newLogs = await getLogs(50)
+      setLogs(newLogs.data.map(normalizeLog))
+    } catch (e) {
+      console.error('writeLog error:', e)
+    }
+  }, [toast])
 
-  // ══════════════════════════════════════════════════════════════
-  //  ALERTS
-  // ══════════════════════════════════════════════════════════════
   const resolveAlertById = useCallback(async (id) => {
     try {
       await apiResolveAlert(id, currentUser.current?.id || null)
       setAlerts(p => p.filter(a => a.id !== id))
       toast('ok', '✅ Đã xử lý cảnh báo')
     } catch (_) {
-      toast('err', '❌ Không thể xử lý cảnh báo')
+      toast('err', '❌ Lỗi khi xử lý cảnh báo')
     }
   }, [toast])
 
@@ -283,13 +304,6 @@ export function useAppState() {
 
   // ══════════════════════════════════════════════════════════════
   //  AUTH FLOW — tích hợp recognizeFace thật
-  //
-  //  Cách dùng tại component cha:
-  //    const { recognizeFace } = useFaceAuth()
-  //    const { startAuth } = useAppState()
-  //    <button onClick={() => startAuth(recognizeFace)}>Xác thực</button>
-  //
-  //  Nếu không truyền recognizeFace → fallback random (dev/demo mode)
   // ══════════════════════════════════════════════════════════════
   const startAuth = useCallback(async (recognizeFace = null) => {
     if (busy) return
@@ -301,7 +315,7 @@ export function useAppState() {
     // Animate progress bar trong khi chờ nhận diện
     let p = 0
     const ticker = setInterval(() => {
-      p = Math.min(90, p + 5)   // dừng ở 90%, đợi kết quả thật
+      p = Math.min(90, p + 5)
       setAuthProgress({ active: true, pct: p, label: p < 50 ? 'Nhận diện khuôn mặt...' : 'Phân tích kết quả...' })
     }, 60)
 
@@ -436,13 +450,10 @@ export function useAppState() {
   }, [toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  FR1 — AUTO TRIGGER (giả lập phát hiện người)
-  //  Lưu ý: auto trigger không truyền recognizeFace → chạy dev mode
-  //  Để auto trigger dùng nhận diện thật, truyền recognizeFaceFn vào setAutoRecognizeFace
+  //  FR1 — AUTO TRIGGER
   // ══════════════════════════════════════════════════════════════
   const recognizeFaceFnRef = useRef(null)
 
-  /** Gọi hàm này ở component cha để kết nối auto trigger với useFaceAuth */
   const setAutoRecognizeFace = useCallback((fn) => {
     recognizeFaceFnRef.current = fn
   }, [])
@@ -471,8 +482,8 @@ export function useAppState() {
     addUserLocal, removeUser,
     toggleAuthMode, applyTheme,
     resolveAlertById, toast, resolveAllAlerts,
-    setAutoRecognizeFace,   // 👈 mới: kết nối auto trigger với recognizeFace thật
-    // MQTT data (có thể expose nếu cần dùng ở component khác)
-    latestFace,             // 👈 thông tin người vừa nhận diện từ MQTT
+    setAutoRecognizeFace,
+    // MQTT data
+    latestFace,
   }
 }

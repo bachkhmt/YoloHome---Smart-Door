@@ -34,6 +34,47 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
     : locked ? 'locked' : 'unlocked'
   const status = statusMap[statusKey]
 
+
+  const handleUnlock = async () => {
+    try {
+      console.log('[DOOR] 🔓 Gửi lệnh mở khóa → Node.js → Adafruit → Python...');
+      const res = await fetch('/api/door/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      console.log('[DOOR] ✅ Mở khóa thành công:', data.message);
+      if (manualUnlock) manualUnlock();
+    } catch (error) {
+      console.error('[DOOR] ❌ Lỗi mở khóa:', error.message);
+      alert('Không thể mở khóa: ' + error.message);
+    }
+  };
+
+  const handleLock = async () => {
+    try {
+      console.log('[DOOR] 🔒 Gửi lệnh khóa → Node.js → Adafruit → Python...');
+      const res = await fetch('/api/door/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      console.log('[DOOR] ✅ Khóa cửa thành công:', data.message);
+      if (manualLock) manualLock();
+    } catch (error) {
+      console.error('[DOOR] ❌ Lỗi khóa cửa:', error.message);
+      alert('Không thể khóa cửa: ' + error.message);
+    }
+  };
+
   /**
    * Kích hoạt xác thực khuôn mặt qua API.
    * 
@@ -108,8 +149,20 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
         >
           {authInProgress ? '⏳ Đang xác thực...' : busy ? '⏳ Đang xử lý...' : '🔍 Xác Thực'}
         </button>
-        <button className={`${styles.btn} ${styles.btnSuccess}`} onClick={manualUnlock}>🔓 Mở</button>
-        <button className={`${styles.btn} ${styles.btnDanger}`}  onClick={manualLock}>🔒 Khóa</button>
+        
+        <button 
+          className={`${styles.btn} ${styles.btnSuccess}`} 
+          onClick={handleUnlock}
+        >
+          🔓 Mở
+        </button>
+        
+        <button 
+          className={`${styles.btn} ${styles.btnDanger}`} 
+          onClick={handleLock}
+        >
+          🔒 Khóa
+        </button>
       </div>
     </div>
   )

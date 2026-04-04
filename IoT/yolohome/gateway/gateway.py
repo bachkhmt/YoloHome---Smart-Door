@@ -1,14 +1,7 @@
-
-
-
 """
 IoT Gateway — unified interface for server communication.
 
-Cải tiến: Thêm instant auth trigger — camera vẫn auto detect liên tục,
-nhưng bấm nút "Xác Thực" trên UI sẽ kích hoạt detect NGAY LẬP TỨC.
-
-Feeds:
-    yolohome.auth-trigger — nhận instant trigger từ React UI
+FIXED: Thêm publish door state lên Adafruit khi mở/khóa cửa thành công.
 """
 
 import json
@@ -52,8 +45,6 @@ class Gateway:
         publish(feed, val)    — publish thẳng lên Adafruit qua REST
 
         set_auth_callback(cb) — đăng ký callback khi có INSTANT trigger từ UI
-                                Camera vẫn auto detect liên tục, callback này
-                                chỉ được gọi khi user bấm nút "Xác Thực"
     """
 
     def __init__(self, config: Optional[AppConfig] = None):
@@ -74,8 +65,6 @@ class Gateway:
             use_simulator=sim,
         )
 
-        # Callback được gọi khi nhận INSTANT trigger từ UI
-        # (khác với auto detect loop — cái này chỉ fire khi user bấm nút)
         self._auth_callback: Optional[Callable[[], None]] = None
 
     # ══════════════════════════════════════════════════════
@@ -94,7 +83,7 @@ class Gateway:
         # Flow B: kết quả nhận diện khuôn mặt
         self.subscribe(FEEDS["face"],        self._on_face_update)
 
-        # Flow C: lệnh từ Adafruit Dashboard
+        # Flow C: lệnh từ Adafruit Dashboard / Frontend
         self.subscribe(FEEDS["door_lock"],   self._on_door_command_from_cloud)
 
         # Flow D: INSTANT trigger từ React UI bấm nút "Xác Thực"
@@ -114,7 +103,7 @@ class Gateway:
         feed_key = update.feed_key
         raw = update.value
 
-        logger.info(f"[HW→ADA→PY] Sensor [{feed_key}]: {raw}")
+        logger.info(f"[DEVICE→ADA→PY] Sensor [{feed_key}]: {raw}")
 
         try:
             value = float(raw)
@@ -141,7 +130,8 @@ class Gateway:
           • Auto detect từ vòng loop liên tục
           • Instant detect từ UI trigger
 
-        Tự động mở cửa nếu nhận ra người quen.
+        FIXED: Tự động mở cửa nếu nhận ra người quen,
+               và PUBLISH trạng thái "UNLOCK" lên Adafruit.
         """
         logger.info(f"[ADA→PY] Face update: {update.value}")
 
@@ -170,21 +160,50 @@ class Gateway:
         # Tự động mở cửa nếu nhận ra người quen
         if is_known:
             logger.info(f"🔓 Chào {label}! Đang mở cửa...")
-            self.send_command(DeviceCommand("door_lock", "unlock"))
+            
+            # ✅ FIX CHÍNH: Publish trạng thái cửa lên Adafruit
+            self.mqtt.publish(FEEDS["door_lock"], "UNLOCK")
+            logger.info("📤 [PY→ADA] Published door state: UNLOCK")
 
     # ══════════════════════════════════════════════════════
-    # Flow C: Adafruit Dashboard → Python → Node.js
+    # Flow C: Adafruit Dashboard / Frontend → Python → Hardware
     # ══════════════════════════════════════════════════════
 
     def _on_door_command_from_cloud(self, update: FeedUpdate):
-        action = update.value.strip().lower()
-        logger.info(f"[CLOUD→PY] Lệnh cửa từ dashboard: {action}")
+        """
+        Nhận lệnh UNLOCK/LOCK từ Frontend (qua Adafruit).
+        
+        Flow:
+          1. Frontend publish "UNLOCK" lên yolohome.door-lock
+          2. Python nhận được ở đây
+          3. Điều khiển hardware (ESP32-CAM flash LED)
+        """
+        action = update.value.strip().upper()
+        logger.info(f"[CLOUD→PY] Lệnh cửa từ Frontend/Dashboard: {action}")
 
+        # Điều khiển ESP32-CAM flash LED
+        if action == "UNLOCK":
+            logger.info("🔓 Đang thực hiện mở khóa (Bật Flash)...")
+            try:
+                requests.get("http://192.168.1.131/control?var=led_intensity&val=10", timeout=1)
+                logger.info("Đã bật Flash LED")
+            except Exception as e:
+                logger.error(f"❌ Lỗi điều khiển thiết bị: {e}")
+                
+        elif action == "LOCK":
+            logger.info("🔒 Đang thực hiện khóa (Tắt Flash)...")
+            try:
+                requests.get("http://192.168.1.131/control?var=led_intensity&val=0", timeout=1)
+                logger.info("Đã tắt Flash LED")
+            except Exception as e:
+                logger.error(f"❌ Lỗi điều khiển thiết bị: {e}")
+
+        # Log vào Node.js
         self._post_to_nodejs("/logs", {
             "user_id":     None,
             "user_name":   "Dashboard",
             "method":      "Manual",
-            "action":      f"door_{action}",
+            "action":      f"door_{action.lower()}",
             "success":     1,
             "fail_reason": None,
             "latency_ms":  None,
@@ -238,7 +257,7 @@ class Gateway:
             gateway.set_auth_callback(on_instant_trigger)
         """
         self._auth_callback = callback
-        logger.info("✅ Instant auth trigger callback đã được đăng ký")
+        logger.info("Instant auth trigger callback đã được đăng ký")
 
     # ══════════════════════════════════════════════════════
     # sync_event — Python/AI modules gọi vào đây
@@ -317,13 +336,14 @@ class Gateway:
         self.mqtt.subscribe(feed_key, callback)
 
     def on_door_command(self, callback: Callable[[FeedUpdate], None]):
+        """DEPRECATED: Dùng subscribe() trực tiếp."""
         self.subscribe(FEEDS["door_lock"], callback)
 
     def send_command(self, cmd: DeviceCommand):
         feed = FEEDS.get(cmd.device_id)
         if feed:
             self.mqtt.publish(feed, cmd.action)
-            logger.info(f"[PY→ADA→HW] {cmd.device_id} → {cmd.action}")
+            logger.info(f"[PY→ADA→DEVICE] {cmd.device_id} → {cmd.action}")
         else:
             logger.warning(
                 f"Không tìm thấy device '{cmd.device_id}'. "
