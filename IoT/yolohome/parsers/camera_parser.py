@@ -49,7 +49,7 @@ class CameraParser:
             if isinstance(data, list):
                 self.known_face_encodings = [np.array(u['face_encoding']) for u in data if u.get('face_encoding')]
                 self.known_face_names = [u['name'] for u in data if u.get('face_encoding')]
-                logger.info(f"Đã cập nhật {len(self.known_face_names)} khuôn mặt người nhà.")
+                # logger.info(f"Đã cập nhật {len(self.known_face_names)} khuôn mặt người nhà.")
             else:
                 logger.warning(f"Dữ liệu API không đúng định dạng (không phải mảng): {data}")
                 
