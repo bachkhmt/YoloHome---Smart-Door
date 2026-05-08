@@ -220,7 +220,14 @@ export function useAppState() {
     
     // 3. Lưu vào MySQL (nếu backend có endpoint)
     try {
-      await apiSetDoorState(unlock ? 0 : 1)
+      await apiSetDoorState(unlock ? 0 : 1, currentUser.current?.id || null, source)
+      // 4. Refresh alerts để lấy door_left_unlocked / resolved alert mới nhất
+      try {
+        const alertsRes = await getAlerts()
+        setAlerts(alertsRes.data)
+      } catch (e) {
+        console.warn('Không thể tải alerts mới:', e.message)
+      }
     } catch (e) {
       console.warn('Không thể lưu door state vào DB:', e.message)
     }

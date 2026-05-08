@@ -222,11 +222,56 @@ app.get('/api/logs', async (req, res) => {
   }
 })
 
+// app.post('/api/logs', async (req, res) => {
+//   try {
+//     const { user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address } = req.body
+//     console.log(`\n[BACKEND - LỊCH SỬ] Nhận thông báo: ${user_name} vừa ra vào bằng ${method || 'Face ID'}. Đang lưu vào MySQL...`);
+//     await query(
+//       `INSERT INTO access_logs
+//          (user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address)
+//        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+//       [
+//         user_id   || null,
+//         user_name || 'Không xác định',
+//         method    || 'Face',
+//         action    || 'Vào',
+//         success   ? 1 : 0,
+//         fail_reason   || null,
+//         latency_ms    || null,
+//         ip_address    || null,
+//       ]
+//     )
+//     // FR10: Kiểm tra thất bại liên tiếp trong 60 giây → tạo cảnh báo
+//     if (!success) {
+//       const recentFails = await query(
+//         `SELECT COUNT(*) AS cnt FROM access_logs
+//          WHERE success = 0
+//            AND created_at >= DATE_SUB(NOW(), INTERVAL 60 SECOND)`
+//       )
+//       if (recentFails[0].cnt >= 3) {
+//         await query(
+//           `INSERT INTO security_alerts
+//              (alert_type, severity, message, related_user_id)
+//            VALUES ('multiple_fail', 'high', ?, ?)`,
+//           [
+//             `${recentFails[0].cnt} lần xác thực thất bại trong 60 giây`,
+//             user_id || null,
+//           ]
+//         )
+//       }
+//     }
+//     res.json({ ok: true })
+//   } catch (e) {
+//     console.error('[POST /logs]', e.message)
+//     res.status(500).json({ error: e.message })
+//   }
+// })
+
 app.post('/api/logs', async (req, res) => {
   try {
     const { user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address } = req.body
     console.log(`\n[BACKEND - LỊCH SỬ] Nhận thông báo: ${user_name} vừa ra vào bằng ${method || 'Face ID'}. Đang lưu vào MySQL...`);
-    await query(
+    const logResult = await query(
       `INSERT INTO access_logs
          (user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -241,26 +286,44 @@ app.post('/api/logs', async (req, res) => {
         ip_address    || null,
       ]
     )
-    // FR10: Kiểm tra thất bại liên tiếp trong 60 giây → tạo cảnh báo
+    const logId = logResult.insertId
+    // FR10: Kiểm tra nhiều lần xác thực thất bại trong 60 giây → tạo cảnh báo
     if (!success) {
       const recentFails = await query(
         `SELECT COUNT(*) AS cnt FROM access_logs
          WHERE success = 0
            AND created_at >= DATE_SUB(NOW(), INTERVAL 60 SECOND)`
       )
-      if (recentFails[0].cnt >= 3) {
-        await query(
-          `INSERT INTO security_alerts
-             (alert_type, severity, message, related_user_id)
-           VALUES ('multiple_fail', 'high', ?, ?)`,
-          [
-            `${recentFails[0].cnt} lần xác thực thất bại trong 60 giây`,
-            user_id || null,
-          ]
+      const failedCount = recentFails[0]?.cnt || 0
+      if (failedCount >= 3) {
+        const recentAlerts = await query(
+          `SELECT COUNT(*) AS cnt
+           FROM security_alerts
+           WHERE alert_type = 'multiple_fail'
+             AND resolved = 0
+             AND triggered_at >= DATE_SUB(NOW(), INTERVAL 120 SECOND)`
         )
+
+        const hasRecentAlert = (recentAlerts[0]?.cnt || 0) > 0
+
+        if (!hasRecentAlert) {
+          await query(
+            `INSERT INTO security_alerts
+               (alert_type, severity, message, related_log_id, related_user_id)
+             VALUES ('multiple_fail', 'high', ?, ?, ?)`,
+            [
+              `${failedCount} lần xác thực thất bại trong 60 giây`,
+              logId,
+              user_id || null,
+            ]
+          )
+
+          console.log(`[SECURITY ALERT] ${failedCount} lần xác thực thất bại trong 60 giây. Đã tạo cảnh báo.`)
+        }
       }
     }
-    res.json({ ok: true })
+
+    res.json({ ok: true, log_id: logId })
   } catch (e) {
     console.error('[POST /logs]', e.message)
     res.status(500).json({ error: e.message })
@@ -270,8 +333,76 @@ app.post('/api/logs', async (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 //  DOOR STATE
 // ══════════════════════════════════════════════════════════════════
+const DOOR_LEFT_UNLOCKED_THRESHOLD_SECONDS = 60
+const ALERT_SUPPRESSION_SECONDS = 120
+
+async function checkDoorLeftUnlocked() {
+  const rows = await query(
+    `SELECT locked, changed_at
+     FROM door_state
+     ORDER BY id DESC
+     LIMIT 1`
+  )
+
+  const state = rows[0]
+  if (!state || state.locked) return null
+
+  const elapsedRows = await query(
+    `SELECT TIMESTAMPDIFF(SECOND, ?, NOW()) AS elapsed_seconds`,
+    [state.changed_at]
+  )
+
+  const elapsed = elapsedRows[0]?.elapsed_seconds || 0
+  if (elapsed < DOOR_LEFT_UNLOCKED_THRESHOLD_SECONDS) return null
+
+  const recentAlerts = await query(
+    `SELECT COUNT(*) AS cnt
+     FROM security_alerts
+     WHERE alert_type = 'door_left_unlocked'
+       AND resolved = 0
+       AND triggered_at >= DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+    [ALERT_SUPPRESSION_SECONDS]
+  )
+
+  const hasRecentAlert = (recentAlerts[0]?.cnt || 0) > 0
+  if (hasRecentAlert) return null
+
+  const result = await query(
+    `INSERT INTO security_alerts
+       (alert_type, severity, message)
+     VALUES ('door_left_unlocked', 'medium', ?)`,
+    [`Cửa đã mở khóa quá ${DOOR_LEFT_UNLOCKED_THRESHOLD_SECONDS} giây`]
+  )
+
+  const [alert] = await query(
+    `SELECT * FROM security_alerts WHERE id = ?`,
+    [result.insertId]
+  )
+
+  console.log(`[SECURITY ALERT] Door left unlocked ${elapsed}s. Đã tạo cảnh báo.`)
+  return alert
+}
+
+async function resolveDoorLeftUnlockedAlerts() {
+  await query(
+    `UPDATE security_alerts
+     SET resolved = 1, resolved_at = NOW()
+     WHERE alert_type = 'door_left_unlocked'
+       AND resolved = 0`
+  )
+}
+
+setInterval(async () => {
+  try {
+    await checkDoorLeftUnlocked()
+  } catch (e) {
+    console.error('[DOOR WATCHDOG]', e.message)
+  }
+}, 10000)
+
 app.get('/api/door/state', async (req, res) => {
   try {
+    await checkDoorLeftUnlocked()
     const rows = await query(
       `SELECT d.locked, d.source, d.changed_at, u.name AS changed_by_name
        FROM door_state d
@@ -287,11 +418,28 @@ app.get('/api/door/state', async (req, res) => {
 app.post('/api/door/state', async (req, res) => {
   try {
     const { locked, changed_by, source } = req.body
+    const isLocked = locked ? 1 : 0
+
     await query(
       `INSERT INTO door_state (locked, changed_by, source) VALUES (?, ?, ?)`,
-      [locked ? 1 : 0, changed_by || null, source || 'dashboard']
+      [isLocked, changed_by || null, source || 'dashboard']
     )
-    res.json({ ok: true })
+
+    if (isLocked) {
+      await resolveDoorLeftUnlockedAlerts()
+    } else {
+      await checkDoorLeftUnlocked()
+    }
+
+    let alert = null
+
+    if (isLocked) {
+      await resolveDoorLeftUnlockedAlerts()
+    } else {
+      alert = await checkDoorLeftUnlocked()
+    }
+
+    res.json({ ok: true, alert })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -340,6 +488,7 @@ app.post('/api/door/unlock', async (req, res) => {
     await query(
       `INSERT INTO door_state (locked, source) VALUES (0, 'dashboard')`,
     )
+    await checkDoorLeftUnlocked()
 
     // 3. Ghi access log
     await query(
@@ -369,6 +518,7 @@ app.post('/api/door/lock', async (req, res) => {
     await query(
       `INSERT INTO door_state (locked, source) VALUES (1, 'dashboard')`,
     )
+    await resolveDoorLeftUnlockedAlerts()
 
     // 3. Ghi access log
     await query(
@@ -593,6 +743,30 @@ app.patch('/api/alerts/:id/resolve', async (req, res) => {
        WHERE id=?`,
       [resolved_by || null, req.params.id]
     )
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.patch('/api/alerts/resolve-by-type', async (req, res) => {
+  try {
+    const { alert_type, resolved_by } = req.body
+
+    if (!alert_type) {
+      return res.status(400).json({ error: 'Thiếu alert_type' })
+    }
+
+    await query(
+      `UPDATE security_alerts
+       SET resolved = 1,
+           resolved_by = ?,
+           resolved_at = NOW()
+       WHERE alert_type = ?
+         AND resolved = 0`,
+      [resolved_by || null, alert_type]
+    )
+
     res.json({ ok: true })
   } catch (e) {
     res.status(500).json({ error: e.message })

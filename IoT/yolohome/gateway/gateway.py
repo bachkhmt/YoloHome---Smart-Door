@@ -20,10 +20,14 @@ logger = logging.getLogger(__name__)
 
 LOCAL_API = "http://localhost:3001/api"
 
+OBSTACLE_DISTANCE_THRESHOLD_CM = 30.0 # Khoảng cách dưới 30cm được coi là có vật cản
+OBSTACLE_ALERT_COOLDOWN_SECONDS = 30
+
 FEEDS = {
     "temperature":  "yolohome.temperature",
     "light":        "yolohome.light",
     "sound":        "yolohome.sound-event",
+    "distance":     "yolohome.distance",
     "face":         "yolohome.face-detected",
     "door_lock":    "yolohome.door-lock",
     "buzzer":       "yolohome.buzzer",
@@ -66,6 +70,7 @@ class Gateway:
         )
 
         self._auth_callback: Optional[Callable[[], None]] = None
+        self._last_obstacle_trigger_at = 0.0
 
     # ══════════════════════════════════════════════════════
     # Lifecycle
@@ -79,6 +84,7 @@ class Gateway:
         self.subscribe(FEEDS["temperature"], self._on_sensor_update)
         self.subscribe(FEEDS["light"],       self._on_sensor_update)
         self.subscribe(FEEDS["sound"],       self._on_sensor_update)
+        self.subscribe(FEEDS["distance"],    self._on_distance_update)
 
         # Flow B: kết quả nhận diện khuôn mặt
         self.subscribe(FEEDS["face"],        self._on_face_update)
@@ -119,6 +125,69 @@ class Gateway:
         field = FEED_TO_FIELD.get(feed_key)
         if field:
             self._post_to_nodejs("/sensors", {field: value})
+            
+    def _on_distance_update(self, update: FeedUpdate):
+        """
+        Module 2 — Obstacle / presence trigger.
+
+        Khi cảm biến khoảng cách phát hiện vật cản/người ở gần cửa:
+        1. Kiểm tra distance < OBSTACLE_DISTANCE_THRESHOLD_CM
+        2. Nếu đúng, kích hoạt camera/auth callback để chụp ảnh/xác thực
+        3. Gửi cảnh báo lên backend
+        4. Dùng cooldown để tránh spam cảnh báo liên tục
+        """
+        raw = update.value
+        logger.info(f"[DEVICE→ADA→PY] Distance sensor [{update.feed_key}]: {raw}")
+
+        try:
+            distance_cm = float(raw)
+        except (ValueError, TypeError):
+            logger.warning(f"Giá trị khoảng cách không hợp lệ: {raw!r}")
+            return
+
+        if distance_cm >= OBSTACLE_DISTANCE_THRESHOLD_CM:
+            self._post_to_nodejs("/alerts/resolve-by-type", {
+                "alert_type": "target_in_range"
+            })
+            return
+
+        now = time.time()
+        if now - self._last_obstacle_trigger_at < OBSTACLE_ALERT_COOLDOWN_SECONDS:
+            logger.info(
+                f"Obstacle trigger bị bỏ qua do cooldown: "
+                f"{distance_cm}cm < {OBSTACLE_DISTANCE_THRESHOLD_CM}cm"
+            )
+            return
+
+        self._last_obstacle_trigger_at = now
+
+        logger.warning(
+            f"Phát hiện vật cản/người trước cửa: "
+            f"{distance_cm}cm < {OBSTACLE_DISTANCE_THRESHOLD_CM}cm"
+        )
+
+        # 1. Kích hoạt chụp ảnh / xác thực nếu camera callback đã đăng ký
+        if self._auth_callback:
+            try:
+                self._auth_callback()
+                logger.info("Đã kích hoạt camera/auth callback từ distance sensor")
+            except Exception as e:
+                logger.error(f"Lỗi khi kích hoạt auth callback từ distance sensor: {e}", exc_info=True)
+        else:
+            logger.warning(
+                "Phát hiện vật cản nhưng chưa có auth callback. "
+                "Cần gọi gateway.set_auth_callback(...) trong module camera/AI."
+            )
+
+        # 2. Gửi cảnh báo lên backend
+        self._post_to_nodejs("/alerts", {
+            "alert_type": "target_in_range",
+            "severity": "low",
+            "message": (
+                f"Phát hiện người/vật cản trong vùng truy cập "
+                f"ở khoảng cách {distance_cm:.1f}cm"
+            ),
+        })
 
     # ══════════════════════════════════════════════════════
     # Flow B: Camera AI → Adafruit → Python → Node.js
@@ -198,11 +267,19 @@ class Gateway:
             except Exception as e:
                 logger.error(f"❌ Lỗi điều khiển thiết bị: {e}")
 
+        # Cập nhật trạng thái cửa vào backend để alert door_left_unlocked hoạt động
+        if action in ("UNLOCK", "LOCK"):
+            self._post_to_nodejs("/door/state", {
+                "locked": 0 if action == "UNLOCK" else 1,
+                "changed_by": None,
+                "source": "auto",
+            })
+
         # Log vào Node.js
         self._post_to_nodejs("/logs", {
             "user_id":     None,
-            "user_name":   "Dashboard",
-            "method":      "Manual",
+            "user_name":   "System",
+            "method":      "Door",
             "action":      f"door_{action.lower()}",
             "success":     1,
             "fail_reason": None,

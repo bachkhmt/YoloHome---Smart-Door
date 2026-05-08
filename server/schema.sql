@@ -162,6 +162,8 @@ CREATE TABLE security_alerts (
     'multiple_fail',
     'unknown_face',
     'door_forced',
+    'door_left_unlocked',
+    'target_in_range',
     'offline_breach',
     'system_error'
   ) NOT NULL,
