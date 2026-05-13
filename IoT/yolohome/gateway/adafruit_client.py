@@ -142,19 +142,19 @@
 
 """
 Adafruit IO REST API client.
-Dùng để publish/read feed qua HTTP khi không cần real-time MQTT.
+Use for publish/read feed via HTTP when real-time MQTT is not needed.
 
-Simulator mode: tất cả API call được log nhưng không gửi đi thật.
-Real mode:      gửi HTTP request tới io.adafruit.com.
+Simulator mode: all API calls are logged but not actually sent.
+Real mode:      sends HTTP request to io.adafruit.com.
 
-Feeds sử dụng trong YOLOHOME:
-    yolohome.temperature    — cảm biến nhiệt độ (mạch thật publish)
-    yolohome.light          — cảm biến ánh sáng (mạch thật publish)
-    yolohome.sound-event    — phát hiện âm thanh
-    yolohome.face-detected  — kết quả nhận diện khuôn mặt (Python AI publish)
-    yolohome.door-lock      — lệnh khoá/mở cửa (output)
-    yolohome.buzzer         — lệnh buzzer (output)
-    yolohome.activity-log   — log hoạt động chung
+Feeds used in YOLOHOME:
+    yolohome.temperature    — temperature sensor (hardware publishes)
+    yolohome.light          — ambient light sensor (hardware publishes)
+    yolohome.sound-event    — sound detection events
+    yolohome.face-detected  — face recognition results (Python AI publishes)
+    yolohome.door-lock      — door lock/unlock commands (output)
+    yolohome.buzzer         — buzzer commands (output)
+    yolohome.activity-log   — general activity log
 """
 
 import json
@@ -169,14 +169,14 @@ logger = logging.getLogger(__name__)
 
 class AdafruitClient:
     """
-    Wrapper mỏng cho Adafruit IO REST API v2.
+    Thin wrapper for Adafruit IO REST API v2.
 
-    Dùng REST khi cần:
-      - Publish 1 lần (không cần real-time)
-      - Đọc giá trị mới nhất của feed
-      - Không muốn dùng MQTT
+    Use REST for:
+      - One-shot publish (no real-time needed)
+      - Read latest feed value
+      - Prefer not to use MQTT
 
-    Với real-time pub/sub, dùng MQTTHandler.
+    For real-time pub/sub, use MQTTHandler.
     """
 
     def __init__(
@@ -209,14 +209,14 @@ class AdafruitClient:
 
     def publish(self, feed_key: str, value: Any) -> FeedUpdate:
         """
-        Gửi một giá trị lên Adafruit IO feed qua REST POST.
+        Send a value to an Adafruit IO feed via REST POST.
 
         Args:
             feed_key: Feed identifier (vd "yolohome.temperature")
-            value:    Giá trị cần gửi — sẽ JSON-serialize nếu không phải string
+            value:    Value to send — JSON-serialized if not a string
 
         Returns:
-            FeedUpdate với data đã publish.
+            FeedUpdate with published data.
         """
         str_value = (
             value if isinstance(value, str)
@@ -240,7 +240,7 @@ class AdafruitClient:
             resp.raise_for_status()
             logger.info(f"[REST] publish {feed_key}: {str_value[:120]}")
         except Exception as e:
-            logger.error(f"[REST] publish thất bại {feed_key}: {e}")
+            logger.error(f"[REST] publish failed {feed_key}: {e}")
 
         return update
 
@@ -248,16 +248,16 @@ class AdafruitClient:
 
     def get_latest(self, feed_key: str) -> Optional[FeedUpdate]:
         """
-        Lấy giá trị mới nhất từ feed qua REST GET.
+        Get the latest value from a feed via REST GET.
 
         Returns:
-            FeedUpdate hoặc None nếu không có data.
+            FeedUpdate or None if no data.
         """
         if self.use_simulator:
             history = self._sim_feeds.get(feed_key, [])
             if history:
                 return history[-1]
-            logger.debug(f"[SIM REST] Không có data trong feed {feed_key}")
+            logger.debug(f"[SIM REST] No data in feed {feed_key}")
             return None
 
         try:
@@ -275,15 +275,15 @@ class AdafruitClient:
                 timestamp=time.time(),
             )
         except Exception as e:
-            logger.error(f"[REST] get_latest thất bại {feed_key}: {e}")
+            logger.error(f"[REST] get_latest failed {feed_key}: {e}")
             return None
 
     # ── Simulator helpers ──
 
     def get_sim_history(self, feed_key: str) -> list:
-        """Lấy toàn bộ lịch sử publish trong simulator mode."""
+        """Get full publish history in simulator mode."""
         return list(self._sim_feeds.get(feed_key, []))
 
     def clear_sim(self):
-        """Xóa in-memory store của simulator."""
+        """Clear the simulator in-memory store."""
         self._sim_feeds.clear()

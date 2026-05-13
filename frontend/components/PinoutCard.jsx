@@ -14,7 +14,7 @@ const PINS = [
 export default function PinoutCard() {
   return (
     <div className={styles.card}>
-      <div className={styles.label}>📟 YOLO:Bit — Sơ Đồ Kết Nối</div>
+      <div className={styles.label}>📟 YOLO:Bit — Pinout Diagram</div>
       <div className={styles.hwBox}>
         <div className={styles.chipTitle}>ESP32 (YOLO:Bit v3)</div>
         {[
@@ -22,7 +22,7 @@ export default function PinoutCard() {
           '🎙️ Mic INMP441 ———— I2S (GPIO 25/26/27)',
           '🔒 Servo MG996R ——— PWM GPIO 12',
           '💡 LED WS2812B ——— GPIO 5 (NeoPixel)',
-          '🌡️ Cảm biến DHT22 —— GPIO 4 (Data)',
+          '🌡️ DHT22 Sensor —— GPIO 4 (Data)',
           '📡 WiFi / Bluetooth — Onboard ESP32',
         ].map(line => <div key={line}>{line}</div>)}
       </div>

@@ -1,10 +1,4 @@
-/**
- * useAppState.js — v6 (FIXED)
- *
- * Thay đổi so với v5:
- *  - Thêm logic publish lên Adafruit khi thay đổi door state
- *  - Khi ấn nút Mở/Khóa → gửi command lên Adafruit → Python nhận được
- */
+/** useAppState — centralized dashboard state and actions */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   getUsers, addUser as apiAddUser, deleteUser as apiDeleteUser,
@@ -18,10 +12,10 @@ import {
 import useAdafruitMqtt from '../hooks/useAdafruitMqtt'
 
 export function useAppState() {
-  // ── ADAFRUIT MQTT — Dữ liệu real-time từ feeds ──────────────────
+  // Adafruit MQTT — real-time feed data
   const { sensorData, latestFace, doorState: mqttDoorState, publishDoorState } = useAdafruitMqtt()
 
-  // ── Core state ──────────────────────────────────────────────────
+  // Core state
   const [locked,       setLocked]       = useState(true)
   const [busy,         setBusy]         = useState(false)
   const [ledState,     setLedState]     = useState('ready')
@@ -44,9 +38,7 @@ export function useAppState() {
   const uptimeStart   = useRef(Date.now())
   const currentUser   = useRef(null)
 
-  // ══════════════════════════════════════════════════════════════
-  //  CẬP NHẬT SENSORS TỪ ADAFRUIT MQTT
-  // ══════════════════════════════════════════════════════════════
+  // Update sensors from Adafruit MQTT
   useEffect(() => {
     if (sensorData) {
       setSensors({
@@ -54,7 +46,7 @@ export function useAppState() {
         hum:   sensorData.hum   ?? sensors.hum,
         light: sensorData.light ?? sensors.light,
       })
-      // Tùy chọn: Lưu vào DB mỗi khi có dữ liệu mới
+      // Optionally save to DB on each update
       saveSensors({ 
         temp: sensorData.temp, 
         hum: sensorData.hum, 
@@ -64,30 +56,24 @@ export function useAppState() {
     }
   }, [sensorData]) // eslint-disable-line
 
-  // ══════════════════════════════════════════════════════════════
-  //  ĐỒNG BỘ DOOR STATE TỪ MQTT
-  // ══════════════════════════════════════════════════════════════
+  // Sync door state from MQTT
   useEffect(() => {
     if (mqttDoorState !== undefined && mqttDoorState !== null) {
-      // mqttDoorState có thể là "UNLOCK"/"LOCK" hoặc "locked"/"unlocked"
+      // mqttDoorState may be "UNLOCK"/"LOCK" or "locked"/"unlocked"
       const isLocked = mqttDoorState.toUpperCase() === 'LOCK' || mqttDoorState === 'locked' || mqttDoorState === true
-      console.log('📥 [MQTT] Nhận door state từ Adafruit:', mqttDoorState, '→ locked =', isLocked)
+      console.log('[MQTT] Door state from Adafruit:', mqttDoorState, '→ locked =', isLocked)
       setLocked(isLocked)
     }
   }, [mqttDoorState])
 
-  // ══════════════════════════════════════════════════════════════
-  //  TOAST
-  // ══════════════════════════════════════════════════════════════
+  // Toast notifications
   const toast = useCallback((type, msg) => {
     const id = Date.now() + Math.random()
     setToasts(p => [...p, { id, type, msg }])
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4100)
   }, [])
 
-  // ══════════════════════════════════════════════════════════════
-  //  LOAD TẤT CẢ DỮ LIỆU KHI KHỞI ĐỘNG
-  // ══════════════════════════════════════════════════════════════
+  // Bootstrap: load all data on mount
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -129,12 +115,12 @@ export function useAppState() {
         }
 
         if (usersRes.status === 'fulfilled') {
-          toast('ok', '🏠 YOLO Home — Đã kết nối MySQL + Adafruit MQTT')
+          toast('ok', '🏠 YOLO Home — MySQL + Adafruit MQTT connected')
         } else {
-          toast('warn', '⚠️ Chạy ở Local Mode — không có DB')
+          toast('warn', '⚠️ Running in Local Mode — no DB')
         }
       } catch (e) {
-        toast('warn', '⚠️ Không thể kết nối backend')
+        toast('warn', '⚠️ Cannot connect to backend')
       } finally {
         setLoading(false)
       }
@@ -142,9 +128,7 @@ export function useAppState() {
     bootstrap()
   }, []) // eslint-disable-line
 
-  // ══════════════════════════════════════════════════════════════
-  //  POLLING — Làm mới dữ liệu mỗi 10 giây
-  // ══════════════════════════════════════════════════════════════
+  // Poll fresh data every 10s
   useEffect(() => {
     if (!dbConnected) return
     const iv = setInterval(async () => {
@@ -165,9 +149,7 @@ export function useAppState() {
     return () => clearInterval(iv)
   }, [dbConnected])
 
-  // ══════════════════════════════════════════════════════════════
-  //  SYSTEM STATS — Giả lập CPU/RAM (không liên quan đến sensors)
-  // ══════════════════════════════════════════════════════════════
+  // Simulated system stats (unrelated to sensors)
   useEffect(() => {
     const iv = setInterval(() => {
       setSysStats({
@@ -180,9 +162,7 @@ export function useAppState() {
     return () => clearInterval(iv)
   }, [])
 
-  // ══════════════════════════════════════════════════════════════
-  //  HELPERS
-  // ══════════════════════════════════════════════════════════════
+  // Helpers
   function normalizeLog(l) {
     return {
       ...l,
@@ -199,42 +179,40 @@ export function useAppState() {
     toast('inf', '🎨 Mood: ' + name)
   }, [toast])
 
-  // ══════════════════════════════════════════════════════════════
-  //  DOOR CONTROL — FIXED: Thêm publish lên Adafruit
-  // ══════════════════════════════════════════════════════════════
+  // Door control — publishes to Adafruit MQTT
   const setDoor = useCallback(async (unlock, source = 'dashboard') => {
     const newState = unlock ? 'UNLOCK' : 'LOCK'
     
-    console.log(`🚪 [DOOR] Thay đổi trạng thái → ${newState} (nguồn: ${source})`)
+    console.log(`[DOOR] State change → ${newState} (source: ${source})`)
     
-    // 1. Cập nhật UI ngay lập tức
+    // 1. Update UI immediately
     setLocked(!unlock)
     
-    // 2. PUBLISH LÊN ADAFRUIT (QUAN TRỌNG!)
+    // 2. Publish to Adafruit MQTT
     if (publishDoorState) {
-      console.log('📤 [MQTT] Publishing lên Adafruit feed yolohome.door-lock:', newState)
+      console.log('[MQTT] Publishing to Adafruit feed yolohome.door-lock:', newState)
       publishDoorState(newState)
     } else {
-      console.warn('⚠️ [MQTT] publishDoorState chưa sẵn sàng')
+      console.warn('[MQTT] publishDoorState not ready')
     }
     
-    // 3. Lưu vào MySQL (nếu backend có endpoint)
+    // 3. Save to MySQL (if backend endpoint is available)
     try {
       await apiSetDoorState(unlock ? 0 : 1)
     } catch (e) {
-      console.warn('Không thể lưu door state vào DB:', e.message)
+      console.warn('Cannot save door state to DB:', e.message)
     }
   }, [publishDoorState])
 
   const manualUnlock = useCallback(async () => {
     if (busy) return
     setBusy(true)
-    toast('inf', '🔓 Đang mở khóa...')
+    toast('inf', '🔓 Unlocking...')
     try {
       await setDoor(true, 'manual')
-      toast('ok', '✅ Đã mở khóa thủ công')
+      toast('ok', '✅ Manually unlocked')
     } catch (e) {
-      toast('err', '❌ Lỗi: ' + e.message)
+      toast('err', '❌ Error: ' + e.message)
     } finally {
       setTimeout(() => setBusy(false), 500)
     }
@@ -243,20 +221,18 @@ export function useAppState() {
   const manualLock = useCallback(async () => {
     if (busy) return
     setBusy(true)
-    toast('inf', '🔒 Đang khóa cửa...')
+    toast('inf', '🔒 Locking...')
     try {
       await setDoor(false, 'manual')
-      toast('ok', '✅ Đã khóa cửa thủ công')
+      toast('ok', '✅ Manually locked')
     } catch (e) {
-      toast('err', '❌ Lỗi: ' + e.message)
+      toast('err', '❌ Error: ' + e.message)
     } finally {
       setTimeout(() => setBusy(false), 500)
     }
   }, [busy, setDoor, toast])
 
-  // ══════════════════════════════════════════════════════════════
-  //  LOG ENTRY
-  // ══════════════════════════════════════════════════════════════
+  // Access log entry
   const writeLog = useCallback(async (user, method, action, success, userId = null, failReason = null) => {
     const entry = {
       user_id:     userId,
@@ -272,7 +248,7 @@ export function useAppState() {
       const res = await apiAddLog(entry)
       if (res.data?.alert_created) {
         setAlerts(p => [...p, res.data.alert])
-        toast('warn', '⚠️ Cảnh báo: thất bại nhiều lần liên tiếp')
+        toast('warn', '⚠️ Alert: multiple consecutive failures')
       }
       const newLogs = await getLogs(50)
       setLogs(newLogs.data.map(normalizeLog))
@@ -285,9 +261,9 @@ export function useAppState() {
     try {
       await apiResolveAlert(id, currentUser.current?.id || null)
       setAlerts(p => p.filter(a => a.id !== id))
-      toast('ok', '✅ Đã xử lý cảnh báo')
+      toast('ok', '✅ Alert resolved')
     } catch (_) {
-      toast('err', '❌ Lỗi khi xử lý cảnh báo')
+      toast('err', '❌ Error resolving alert')
     }
   }, [toast])
 
@@ -296,27 +272,25 @@ export function useAppState() {
     try {
       await Promise.all(alerts.map(a => apiResolveAlert(a.id, currentUser.current?.id || null)))
       setAlerts([])
-      toast('ok', `✅ Đã xử lý toàn bộ ${alerts.length} cảnh báo`)
+      toast('ok', `✅ All ${alerts.length} alerts resolved`)
     } catch (_) {
-      toast('err', '❌ Có lỗi khi xử lý danh sách cảnh báo')
+      toast('err', '❌ Error resolving alert list')
     }
   }, [alerts, toast])
 
-  // ══════════════════════════════════════════════════════════════
-  //  AUTH FLOW — tích hợp recognizeFace thật
-  // ══════════════════════════════════════════════════════════════
+  // Auth flow — integrated face recognition
   const startAuth = useCallback(async (recognizeFace = null) => {
     if (busy) return
     setBusy(true)
     setLedState('auth')
-    setCamState({ label: 'SCANNING...', sub: 'Nhận diện sinh trắc học...', color: 'var(--warn)', showAvatar: false, avatarSeed: '' })
-    setAuthProgress({ active: true, pct: 0, label: 'Nhận diện khuôn mặt...' })
+    setCamState({ label: 'SCANNING...', sub: 'Biometric scan...', color: 'var(--warn)', showAvatar: false, avatarSeed: '' })
+    setAuthProgress({ active: true, pct: 0, label: 'Recognizing face...' })
 
-    // Animate progress bar trong khi chờ nhận diện
+    // Animate progress bar while waiting
     let p = 0
     const ticker = setInterval(() => {
       p = Math.min(90, p + 5)
-      setAuthProgress({ active: true, pct: p, label: p < 50 ? 'Nhận diện khuôn mặt...' : 'Phân tích kết quả...' })
+      setAuthProgress({ active: true, pct: p, label: p < 50 ? 'Face recognition...' : 'Analyzing results...' })
     }, 60)
 
     try {
@@ -325,35 +299,35 @@ export function useAppState() {
       let faceResult = null
 
       if (authMode.face && typeof recognizeFace === 'function') {
-        // ── NHẬN DIỆN THẬT (useFaceAuth) ──────────────────────────
+        // Real recognition via useFaceAuth
         faceResult = await recognizeFace()
       } else if (authMode.face) {
-        // ── FALLBACK: random (dev mode khi chưa truyền recognizeFace) ──
+        // Fallback: random match (dev mode, no recognizeFace)
         const activeUsers = users.filter(u => u.online === 1 || u.online === true)
         const randomOk    = Math.random() > 0.2
         if (randomOk && activeUsers.length) {
           const u = activeUsers[Math.floor(Math.random() * activeUsers.length)]
           faceResult = { ok: true, user: { ...u, userId: u.id }, confidence: 85 }
         } else {
-          faceResult = { ok: false, user: null, reason: 'Không khớp (dev mode)' }
+          faceResult = { ok: false, user: null, reason: 'No match (dev mode)' }
         }
       } else {
-        // Face auth tắt → coi như pass
+        // Face auth disabled → auto-pass
         faceResult = { ok: true, user: null }
       }
 
-      // Voice auth: vẫn giả lập (chưa có module voice thật)
+      // Voice auth: simulated (no real voice module yet)
       const voiceOk = !authMode.voice || Math.random() > 0.25
 
       clearInterval(ticker)
-      setAuthProgress({ active: true, pct: 100, label: 'Hoàn tất' })
+      setAuthProgress({ active: true, pct: 100, label: 'Complete' })
 
       const ok = faceResult.ok && voiceOk
 
       if (ok && faceResult.user) {
-        // Khớp với user từ useFaceAuth — tìm record đầy đủ trong DB nếu có
+        // Matched user from useFaceAuth — find full DB record if available
         const userId   = faceResult.user.userId ?? faceResult.user.id ?? null
-        const userName = faceResult.user.name ?? 'Người dùng'
+        const userName = faceResult.user.name ?? 'User'
         const dbUser   = users.find(u => u.id === userId) || faceResult.user
         const seed     = dbUser.seed || userName.replace(/\s+/g, '')
 
@@ -363,33 +337,33 @@ export function useAppState() {
         await setDoor(true, 'face_auth')
         setCamState({
           label: 'GRANTED ✓',
-          sub: `Xin chào, ${userName} (${faceResult.confidence ?? '—'}%)`,
+          sub: `Hello, ${userName} (${faceResult.confidence ?? '—'}%)`,
           color: 'var(--success)',
           showAvatar: true,
           avatarSeed: seed,
         })
-        await writeLog(userName, method, 'Vào', true, userId)
-        toast('ok', `✅ Xác thực thành công — ${userName}`)
+        await writeLog(userName, method, 'Enter', true, userId)
+        toast('ok', `✅ Auth success — ${userName}`)
         failWindowRef.current = []
 
       } else if (ok && !faceResult.user) {
-        // Face tắt + voice ok → mở nhưng không có thông tin user
+        // Face disabled + voice ok → unlock without user info
         setLedState('granted')
         await setDoor(true, 'voice_auth')
-        setCamState({ label: 'GRANTED ✓', sub: 'Xác thực giọng nói', color: 'var(--success)', showAvatar: false, avatarSeed: '' })
-        await writeLog('Không xác định', method, 'Vào', true)
-        toast('ok', '✅ Xác thực giọng nói thành công')
+        setCamState({ label: 'GRANTED ✓', sub: 'Voice verified', color: 'var(--success)', showAvatar: false, avatarSeed: '' })
+        await writeLog('Unknown', method, 'Enter', true)
+        toast('ok', '✅ Voice verification successful')
         failWindowRef.current = []
 
       } else {
         // THẤT BẠI
         setLedState('denied')
         const reason = !faceResult.ok
-          ? (faceResult.reason || 'Không khớp khuôn mặt')
-          : 'Không khớp giọng nói'
+          ? (faceResult.reason || 'Face mismatch')
+          : 'Voice mismatch'
         setCamState({ label: 'DENIED ✗', sub: reason, color: 'var(--danger)', showAvatar: false, avatarSeed: '' })
-        await writeLog('Không xác định', method, 'Thử', false, null, reason)
-        toast('err', '❌ Từ chối truy cập — ' + reason)
+        await writeLog('Unknown', method, 'Attempt', false, null, reason)
+        toast('err', '❌ Access denied — ' + reason)
 
         const now = Date.now()
         failWindowRef.current = failWindowRef.current.filter(t => now - t < 60000)
@@ -397,7 +371,7 @@ export function useAppState() {
       }
     } catch (e) {
       clearInterval(ticker)
-      toast('err', '❌ Lỗi xác thực: ' + e.message)
+      toast('err', '❌ Auth error: ' + e.message)
     } finally {
       setTimeout(() => setBusy(false), 500)
       setTimeout(() => {
@@ -412,7 +386,7 @@ export function useAppState() {
   //  USER MANAGEMENT
   // ══════════════════════════════════════════════════════════════
   const addUserLocal = useCallback(async (name, role) => {
-    if (!name.trim()) { toast('warn', '⚠️ Vui lòng nhập tên'); return false }
+    if (!name.trim()) { toast('warn', '⚠️ Please enter a name'); return false }
     try {
       const res = await apiAddUser({
         name: name.trim(),
@@ -420,10 +394,10 @@ export function useAppState() {
         seed: name.trim().replace(/\s+/g, ''),
       })
       setUsers(p => [...p, res.data])
-      toast('ok', '✅ Đã thêm: ' + name)
+      toast('ok', '✅ Added: ' + name)
       return true
     } catch (e) {
-      toast('err', '❌ Lỗi thêm người dùng: ' + (e.response?.data?.error || e.message))
+      toast('err', '❌ Failed to add user: ' + (e.response?.data?.error || e.message))
       return false
     }
   }, [toast])
@@ -432,9 +406,9 @@ export function useAppState() {
     try {
       await apiDeleteUser(id)
       setUsers(p => p.filter(u => u.id !== id))
-      toast('inf', 'Đã xóa người dùng')
+      toast('inf', 'User deleted')
     } catch (e) {
-      toast('err', '❌ Không thể xóa: ' + (e.response?.data?.error || e.message))
+      toast('err', '❌ Could not delete: ' + (e.response?.data?.error || e.message))
     }
   }, [toast])
 
@@ -461,7 +435,7 @@ export function useAppState() {
   useEffect(() => {
     const iv = setInterval(() => {
       if (!busy && Math.random() < 0.08) {
-        toast('inf', '📡 Phát hiện người — tự động xác thực...')
+        toast('inf', '📡 Person detected — auto-authenticating...')
         setTimeout(() => {
           if (!busy) startAuth(recognizeFaceFnRef.current)
         }, 900)
@@ -470,19 +444,45 @@ export function useAppState() {
     return () => clearInterval(iv)
   }, [busy, startAuth, toast])
 
+  // ══════════════════════════════════════════════════════════════
+  //  FACE MATCH HANDLER — triggered by face-recognizer pipeline
+  // ══════════════════════════════════════════════════════════════
+  const handleFaceMatch = useCallback(async (match) => {
+    const name = match.name || 'Unknown'
+    const confidence = match.confidence ?? 0
+
+    setLedState('granted')
+    await setDoor(true, 'face_auth')
+    setCamState({
+      label: 'GRANTED ✓',
+      sub: `Welcome, ${name} (${Math.round(confidence * 100)}%)`,
+      color: 'var(--success)',
+      showAvatar: true,
+      avatarSeed: name.replace(/\s+/g, ''),
+    })
+    await writeLog(name, 'Face', 'Enter', true, null)
+    toast('ok', `✅ Access granted — ${name}`)
+
+    // Reset after 5 seconds
+    setTimeout(() => {
+      setLedState('ready')
+      setCamState({ label: 'READY', sub: '...', color: 'var(--theme)', showAvatar: false, avatarSeed: '' })
+    }, 5000)
+  }, [setDoor, writeLog, toast, setLedState, setCamState])
+
   return {
     // State
     locked, busy, ledState, authMode, users, logs, alerts, toasts,
     theme, fanSpeed, sensors, sysStats, authProgress, camState,
     dbConnected, loading, chartData, uptimeStart,
     // Setters
-    setFanSpeed,
+    setFanSpeed, setLedState, setCamState,
     // Actions
     startAuth, manualUnlock, manualLock,
     addUserLocal, removeUser,
     toggleAuthMode, applyTheme,
     resolveAlertById, toast, resolveAllAlerts,
-    setAutoRecognizeFace,
+    setAutoRecognizeFace, handleFaceMatch,
     // MQTT data
     latestFace,
   }

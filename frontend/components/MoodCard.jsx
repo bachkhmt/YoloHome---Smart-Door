@@ -23,7 +23,7 @@ export default function MoodCard({ theme, applyTheme }) {
           />
         ))}
       </div>
-      <div className={styles.name}>Hiện tại: {theme.name}</div>
+      <div className={styles.name}>Current: {theme.name}</div>
     </div>
   )
 }

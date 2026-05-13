@@ -1,6 +1,3 @@
-/**
- * ActivityChart — dữ liệu thật từ DB (v_weekly_auth_stats)
- */
 import { useRef, useMemo } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale,
@@ -11,22 +8,20 @@ import styles from './css/ActivityChart.module.css'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler)
 
-// Fallback khi DB chưa có dữ liệu
-const EMPTY_WEEK = ['T2','T3','T4','T5','T6','T7','CN'].map(d => ({
+// Fallback when DB has no data yet
+const EMPTY_WEEK = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => ({
   day_name: d, success_count: 0, fail_count: 0
 }))
 
-// Map tên tiếng Anh → viết tắt tiếng Việt
 const DAY_MAP = {
-  Monday:'T2', Tuesday:'T3', Wednesday:'T4', Thursday:'T5',
-  Friday:'T6', Saturday:'T7', Sunday:'CN'
+  Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu',
+  Friday:'Fri', Saturday:'Sat', Sunday:'Sun'
 }
 
 export default function ActivityChart({ theme, chartData }) {
   const chartRef = useRef(null)
-  const primary  = theme?.primary || '#ec4899'
+  const primary = theme?.primary || '#ec4899'
 
-  // Xử lý dữ liệu từ DB
   const { labels, successData, failData } = useMemo(() => {
     const rows = chartData?.length ? chartData : EMPTY_WEEK
     return {
@@ -54,7 +49,7 @@ export default function ActivityChart({ theme, chartData }) {
     labels,
     datasets: [
       {
-        label: 'Thành công',
+        label: 'Success',
         data:  successData,
         borderColor:      primary,
         backgroundColor:  buildGradient(),
@@ -63,7 +58,7 @@ export default function ActivityChart({ theme, chartData }) {
         pointBorderColor: '#fff', pointBorderWidth: 1.5,
       },
       {
-        label: 'Thất bại',
+        label: 'Failed',
         data:  failData,
         borderColor: '#ef4444', backgroundColor: 'transparent',
         fill: false, tension: 0.4, borderWidth: 2,
@@ -90,7 +85,7 @@ export default function ActivityChart({ theme, chartData }) {
             const idx = items[0]?.dataIndex
             if (idx == null) return ''
             const s = successData[idx], f = failData[idx], total = s + f
-            return total ? `Tổng: ${total} | Tỉ lệ: ${Math.round(s/total*100)}%` : ''
+            return total ? `Total: ${total} | Rate: ${Math.round(s/total*100)}%` : ''
           }
         }
       }
@@ -111,15 +106,15 @@ export default function ActivityChart({ theme, chartData }) {
   return (
     <div className={styles.card}>
       <div className={styles.header}>
-        <div className={styles.label}>📊 Lịch Sử Hoạt Động (7 ngày)</div>
+        <div className={styles.label}>📊 Activity History (7 Days)</div>
         <div className={styles.summary}>
           {isRealData ? (
             <>
-              <span className={styles.tagOk}>✓ {totalSuccess} thành công</span>
-              <span className={styles.tagFail}>✗ {totalFail} thất bại</span>
+              <span className={styles.tagOk}>✓ {totalSuccess} success</span>
+              <span className={styles.tagFail}>✗ {totalFail} failed</span>
             </>
           ) : (
-            <span className={styles.tagEmpty}>Chưa có dữ liệu</span>
+            <span className={styles.tagEmpty}>No data yet</span>
           )}
         </div>
       </div>

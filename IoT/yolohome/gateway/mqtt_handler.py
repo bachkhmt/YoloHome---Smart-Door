@@ -135,30 +135,30 @@
 #         topic = msg.topic
 #         payload = msg.payload.decode("utf-8", errors="replace")
         
-#         # 1. In ra MỌI THỨ bay về từ Adafruit để xem có nhận được gì không
-#         logger.info(f"👉 [DEBUG MQTT] BẮT ĐƯỢC TIN NHẮN! Topic: {topic} | Giá trị: {payload}")
+#         # 1. Print EVERYTHING from Adafruit to see what is received
+#         logger.info(f"👉 [DEBUG MQTT] MESSAGE RECEIVED! Topic: {topic} | Value: {payload}")
         
-#         # 2. Xử lý đường dẫn linh hoạt (Adafruit có thể dùng /feeds/ hoặc /f/)
+#         # 2. Flexible path handling (Adafruit may use /feeds/ or /f/)
 #         if "/feeds/" in topic:
 #             feed_key = topic.split("/feeds/")[1]
 #         elif "/f/" in topic:
 #             feed_key = topic.split("/f/")[1]
 #         else:
-#             feed_key = topic.split("/")[-1]  # Lấy đại chữ cuối cùng nếu cấu trúc lạ
+#             feed_key = topic.split("/")[-1]  # Grab last segment for unknown formats
             
 #         update = FeedUpdate(
 #             feed_key=feed_key,
 #             value=payload,
 #         )
         
-#         # 3. Kiểm tra xem code có đang lắng nghe đúng Feed này không
+#         # 3. Check if code is listening to this Feed
 #         subs = self._subscribers.get(feed_key, [])
 #         if not subs:
-#             logger.warning(f"⚠️ [DEBUG MQTT] Kênh '{feed_key}' có dữ liệu nhưng KHÔNG CÓ HÀM NÀO LẮNG NGHE!")
-#             logger.warning(f"   (Các kênh đang được lắng nghe hiện tại: {list(self._subscribers.keys())})")
+#             logger.warning(f"⚠️ [DEBUG MQTT] Channel '{feed_key}' has data but NO LISTENER registered!")
+logger.warning(f"   (Channels currently listening on: {list(self._subscribers.keys())}")
 #             return
 
-#         # 4. Truyền dữ liệu cho hàm xử lý
+#         # 4. Pass data to handler
 #         for cb in subs:
 #             try:
 #                 cb(update)
@@ -177,13 +177,13 @@
 
 """
 MQTT handler for Adafruit IO.
-Real-time pub/sub cho sensor data và device commands.
+Real-time pub/sub for sensor data and device commands.
 
 Topic format: {username}/feeds/{feed_key}
 
-Simulator mode: in-process message bus — pub/sub hoạt động đầy đủ
-                mà không cần kết nối broker thật.
-Real mode:      paho-mqtt kết nối tới io.adafruit.com:1883,
+Simulator mode: in-process message bus — full pub/sub
+                without a real broker connection.
+Real mode:      paho-mqtt connects to io.adafruit.com:1883,
                 subscribe ngay sau khi connect.
 """
 
@@ -199,14 +199,14 @@ logger = logging.getLogger(__name__)
 
 class MQTTHandler:
     """
-    Quản lý kết nối MQTT tới Adafruit IO.
+    Manage MQTT connection to Adafruit IO.
 
-    Lưu ý quan trọng với real mode:
-        - subscribe() phải được gọi SAU connect() để paho đăng ký topic.
-        - Trong Gateway.start(), tất cả subscribe() được gọi sau mqtt.connect()
-          nên thứ tự đúng.
-        - Nếu kết nối bị ngắt và reconnect, các topic sẽ được subscribe lại
-          tự động qua on_connect callback (clean_session=False).
+    Important notes for real mode:
+        - subscribe() must be called AFTER connect() for paho to register topics.
+        - In Gateway.start(), all subscribe() calls happen after mqtt.connect()
+          so the order is correct.
+        - If connection drops and reconnects, topics are re-subscribed
+          automatically via the on_connect callback (clean_session=False).
     """
 
     def __init__(
@@ -226,7 +226,7 @@ class MQTTHandler:
         # feed_key → [callback, ...]
         self._subscribers: Dict[str, List[Callable[[FeedUpdate], None]]] = {}
 
-        # Log các message đã publish (simulator)
+        # Log published messages (simulator)
         self._sim_messages: List[dict] = []
 
         self._connected = False
@@ -241,7 +241,7 @@ class MQTTHandler:
     # ══════════════════════════════════════════
 
     def connect(self):
-        """Kết nối tới MQTT broker hoặc khởi động simulator bus."""
+        """Connect to MQTT broker or start simulator bus."""
         if self.use_simulator:
             self._connected = True
             logger.info("[SIM] MQTT in-process bus started")
@@ -252,7 +252,7 @@ class MQTTHandler:
 
             client = mqtt_lib.Client(
                 client_id=f"yolohome-{self.username}",
-                clean_session=False,   # Giữ subscriptions khi reconnect
+                clean_session=False,   # Keep subscriptions on reconnect
             )
             client.username_pw_set(self.username, self.aio_key)
             client.on_connect    = self._on_connect
@@ -260,19 +260,19 @@ class MQTTHandler:
             client.on_message    = self._on_real_message
 
             client.connect(self.host, self.port, keepalive=60)
-            client.loop_start()   # Thread ngầm xử lý network I/O
+            client.loop_start()   # Background thread for network I/O
 
             self._client = client
             self._connected = True
             logger.info(f"MQTT connecting → {self.host}:{self.port}")
 
         except ImportError:
-            logger.error("paho-mqtt chưa được cài. Chạy: pip install paho-mqtt")
+            logger.error("paho-mqtt not installed. Run: pip install paho-mqtt")
         except Exception as e:
             logger.error(f"MQTT connection failed: {e}")
 
     def disconnect(self):
-        """Ngắt kết nối MQTT."""
+        """Disconnect MQTT."""
         self._connected = False
         if self._client:
             self._client.loop_stop()
@@ -282,7 +282,7 @@ class MQTTHandler:
             logger.info("[SIM] MQTT bus stopped")
 
     def _on_connect(self, client, userdata, flags, rc):
-        """Callback khi paho kết nối thành công — subscribe lại tất cả feed."""
+        """Callback on successful paho connect — re-subscribe all feeds."""
         if rc == 0:
             logger.info(f"MQTT connected (rc=0)")
             # Re-subscribe sau reconnect
@@ -295,7 +295,7 @@ class MQTTHandler:
 
     def _on_disconnect(self, client, userdata, rc):
         if rc != 0:
-            logger.warning(f"MQTT unexpected disconnect rc={rc} — paho sẽ tự reconnect")
+            logger.warning(f"MQTT unexpected disconnect rc={rc} — paho will auto-reconnect")
 
     # ══════════════════════════════════════════
     # Subscribe
@@ -303,12 +303,12 @@ class MQTTHandler:
 
     def subscribe(self, feed_key: str, callback: Callable[[FeedUpdate], None]):
         """
-        Đăng ký callback cho một feed.
-        Có thể gọi nhiều lần với cùng feed_key — tất cả callback đều được gọi.
+        Register a callback for a feed.
+        May be called multiple times for same feed_key — all callbacks invoked.
 
         Args:
-            feed_key: Feed cần subscribe (vd "yolohome.door-lock")
-            callback: Hàm nhận FeedUpdate khi có message mới
+            feed_key: Feed to subscribe (e.g. "yolohome.door-lock")
+            callback: Function receiving FeedUpdate on new message
         """
         with self._lock:
             self._subscribers.setdefault(feed_key, []).append(callback)
@@ -325,11 +325,11 @@ class MQTTHandler:
 
     def publish(self, feed_key: str, value: Any):
         """
-        Publish một giá trị lên feed.
+        Publish a value to a feed.
 
         Args:
-            feed_key: Feed đích (vd "yolohome.temperature")
-            value: Giá trị — sẽ được JSON-serialize nếu không phải string
+            feed_key: Target feed (e.g. "yolohome.temperature")
+            value: Value — JSON-serialized if not a string
         """
         str_value = (
             value if isinstance(value, str)
@@ -338,7 +338,7 @@ class MQTTHandler:
         update = FeedUpdate(feed_key=feed_key, value=str_value)
 
         if self.use_simulator:
-            # Simulator: dispatch trực tiếp tới subscriber trong process
+            # Simulator: dispatch directly to in-process subscriber
             with self._lock:
                 self._sim_messages.append(update.to_dict())
                 callbacks = list(self._subscribers.get(feed_key, []))
@@ -357,17 +357,17 @@ class MQTTHandler:
             self._client.publish(self._topic(feed_key), str_value, qos=1)
             logger.info(f"MQTT publish {feed_key}: {str_value[:120]}")
         else:
-            logger.warning(f"MQTT chưa kết nối — bỏ qua publish {feed_key}")
+            logger.warning(f"MQTT not connected — skipping publish {feed_key}")
 
     # ══════════════════════════════════════════
     # Internal
     # ══════════════════════════════════════════
 
     def _on_real_message(self, client, userdata, msg):
-        """Xử lý message MQTT từ broker thật."""
+        """Process MQTT message from real broker."""
         parts = msg.topic.split("/feeds/")
         if len(parts) != 2:
-            logger.warning(f"Topic không đúng format: {msg.topic}")
+            logger.warning(f"Topic format incorrect: {msg.topic}")
             return
 
         feed_key = parts[1]
@@ -390,11 +390,11 @@ class MQTTHandler:
     # ══════════════════════════════════════════
 
     def get_sim_messages(self) -> list:
-        """Trả về tất cả message đã publish trong simulator mode."""
+        """Return all messages published in simulator mode."""
         with self._lock:
             return list(self._sim_messages)
 
     def clear_sim(self):
-        """Xóa log message trong simulator mode."""
+        """Clear message log in simulator mode."""
         with self._lock:
             self._sim_messages.clear() 

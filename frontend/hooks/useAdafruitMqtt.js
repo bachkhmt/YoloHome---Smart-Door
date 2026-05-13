@@ -1,10 +1,10 @@
 /**
  * useAdafruitMqtt.js
  * 
- * Custom Hook để kết nối MQTT với Adafruit IO
- * Nhận dữ liệu real-time từ các feed:
+ * Custom Hook to connect MQTT to Adafruit IO
+ * Receives real-time data from feeds:
  *  - Sensors: temp, hum, light
- *  - Door state: locked/unlocked  ← Python publish sau khi thực hiện lệnh
+ *  - Door state: locked/unlocked  ← Python publishes after executing command
  *  - Face detection: label, confidence
  */
 
@@ -25,20 +25,20 @@ const ADAFRUIT_CONFIG = {
 export default function useAdafruitMqtt() {
   const [sensorData, setSensorData] = useState({ temp: 24.5, hum: 52, light: 310 });
   const [latestFace, setLatestFace] = useState(null);
-  const [doorState, setDoorState]   = useState(null);  // null = chưa nhận từ Adafruit
+  const [doorState, setDoorState]   = useState(null);  // null = not yet received from Adafruit
   const [connected, setConnected]   = useState(false);
 
   const clientRef = useRef(null);
 
   useEffect(() => {
-    // Không check cứng credentials — chỉ cần có giá trị là kết nối
+    // Don't enforce credentials — any value will attempt connection
     if (!ADAFRUIT_CONFIG.username || !ADAFRUIT_CONFIG.key) {
-      console.warn('⚠️ Chưa cấu hình Adafruit IO credentials trong useAdafruitMqtt.js');
+      console.warn('⚠️ Adafruit IO credentials not configured in useAdafruitMqtt.js');
       return;
     }
 
     import('mqtt').then((mqtt) => {
-      // path /mqtt bắt buộc với Adafruit IO WebSocket
+      // /mqtt path is required for Adafruit IO WebSocket
       const brokerUrl = `wss://io.adafruit.com:443/mqtt`;
       const options = {
         username: ADAFRUIT_CONFIG.username,
@@ -48,12 +48,12 @@ export default function useAdafruitMqtt() {
         reconnectPeriod: 5000,
       };
 
-      console.log('🔄 Đang kết nối Adafruit MQTT...');
+      console.log('🔄 Connecting to Adafruit MQTT...');
       const client = mqtt.connect(brokerUrl, options);
       clientRef.current = client;
 
       client.on('connect', () => {
-        console.log('✅ Đã kết nối Adafruit MQTT');
+        console.log('✅ Connected to Adafruit MQTT');
         setConnected(true);
 
         const { username, feeds } = ADAFRUIT_CONFIG;
@@ -63,7 +63,7 @@ export default function useAdafruitMqtt() {
         client.subscribe(`${username}/feeds/${feeds.door}`);
         client.subscribe(`${username}/feeds/${feeds.face}`);
 
-        console.log('📡 Đã subscribe các feed:', Object.values(feeds));
+        console.log('📡 Subscribed to feeds:', Object.values(feeds));
       });
 
       client.on('message', (topic, message) => {
@@ -73,19 +73,19 @@ export default function useAdafruitMqtt() {
 
           if (topic.includes(feeds.temp)) {
             setSensorData(prev => ({ ...prev, temp: parseFloat(payload) }));
-            console.log('🌡️ Nhiệt độ:', payload);
+            console.log('🌡️ Temperature:', payload);
           }
           else if (topic.includes(feeds.humidity)) {
             setSensorData(prev => ({ ...prev, hum: parseFloat(payload) }));
-            console.log('💧 Độ ẩm:', payload);
+            console.log('💧 Humidity:', payload);
           }
           else if (topic.includes(feeds.light)) {
             setSensorData(prev => ({ ...prev, light: parseFloat(payload) }));
-            console.log('💡 Ánh sáng:', payload);
+            console.log('💡 Light:', payload);
           }
           else if (topic.includes(feeds.door)) {
-            // Python publish "UNLOCK" hoặc "LOCK" sau khi thực hiện lệnh thật
-            console.log('🚪 [MQTT] Nhận door state từ Adafruit:', payload);
+            // Python publishes "UNLOCK" or "LOCK" after executing the real command
+            console.log('🚪 [MQTT] Received door state from Adafruit:', payload);
             setDoorState(payload);
           }
           else if (topic.includes(feeds.face)) {
@@ -94,10 +94,10 @@ export default function useAdafruitMqtt() {
             } catch {
               setLatestFace({ label: payload, confidence: null });
             }
-            console.log('👤 Nhận diện:', payload);
+            console.log('👤 Face detected:', payload);
           }
         } catch (err) {
-          console.error('❌ Lỗi parse MQTT message:', err);
+          console.error('❌ MQTT parse error:', err);
         }
       });
 
@@ -112,18 +112,18 @@ export default function useAdafruitMqtt() {
       });
 
       client.on('reconnect', () => {
-        console.log('🔄 Đang reconnect MQTT...');
+        console.log('🔄 Reconnecting MQTT...');
       });
 
     }).catch((err) => {
-      console.error('❌ Không thể load MQTT library:', err);
-      console.log('💡 Chạy: npm install mqtt');
+      console.error('❌ Could not load MQTT library:', err);
+      console.log('💡 Run: npm install mqtt');
     });
 
     return () => {
       if (clientRef.current) {
         clientRef.current.end();
-        console.log('🛑 Đã ngắt kết nối MQTT');
+        console.log('🛑 MQTT disconnected');
       }
     };
   }, []);

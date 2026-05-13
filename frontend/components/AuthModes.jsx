@@ -3,7 +3,7 @@ import styles from './css/AuthModes.module.css'
 export default function AuthModes({ authMode, toggleAuthMode }) {
   return (
     <div className={styles.card}>
-      <div className={styles.label}>🔐 Phương Thức Xác Thực</div>
+      <div className={styles.label}>🔐 Auth Methods</div>
       <div className={styles.grid}>
         {[
           { key: 'face',  icon: '👤', name: 'FACE ID'  },
@@ -16,7 +16,7 @@ export default function AuthModes({ authMode, toggleAuthMode }) {
           >
             <div className={styles.icon}>{m.icon}</div>
             <div className={styles.name}>{m.name}</div>
-            <div className={styles.badge}>{authMode[m.key] ? 'BẬT' : 'TẮT'}</div>
+            <div className={styles.badge}>{authMode[m.key] ? 'ON' : 'OFF'}</div>
           </div>
         ))}
       </div>

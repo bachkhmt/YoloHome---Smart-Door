@@ -1,14 +1,7 @@
-"""
-YOLO Home — run.py (FIXED)
+"""YOLO Home — entrypoint.
 
-THAY ĐỔI:
-  - XÓA logic điều khiển ESP32-CAM trong handle_mqtt_command
-  - Logic điều khiển hardware đã được chuyển vào gateway.py
-  - File này chỉ còn khởi tạo và chạy các module chính
-
-Đặt vào: YOLOHOME/ (cùng cấp với run.sh, pyproject.toml)
-Chạy: python run.py
-Yêu cầu Node server chạy trước: cd server && node index.js
+Run: python run.py
+Requires Node server running: cd server && node index.js
 """
 import time, signal, logging, threading, sys
 from yolohome.config import load_config

@@ -9,8 +9,13 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => path,
-      }
-    }
-  }
+      },
+      // Face Recognizer FastAPI server
+      '/face-recognizer': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/face-recognizer/, ''),
+      },
+    },
+  },
 })

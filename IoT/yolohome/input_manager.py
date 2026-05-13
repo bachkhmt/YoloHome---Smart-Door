@@ -186,15 +186,15 @@
 #             # --- ĐOẠN MỚI THÊM TRY...EXCEPT Ở ĐÂY ---
 #             try:
 #                 frame = cam.capture_once(elapsed)
-#                 # Chỉ xử lý nếu frame hợp lệ (để phòng hờ trường hợp capture_once trả về None)
+#                 # Only process if frame is valid (guard against capture_once returning None)
 #                 if frame is not None:
 #                     self.handle_camera_frame(frame)
 #             except RuntimeError as e:
-#                 logger.warning(f"Lỗi đọc camera (Mất kết nối?): {e}. Thử lại sau 1s...")
+#                 logger.warning(f"Camera read error (Disconnected?): {e}. Retrying in 1s...")
 #                 time.sleep(1.0)
 #                 continue
 #             except Exception as e:
-#                 logger.error(f"Lỗi không xác định ở camera thread: {e}")
+#                 logger.error(f"Unknown error in camera thread: {e}")
 #                 time.sleep(1.0)
 #                 continue
 #             # ----------------------------------------
@@ -264,12 +264,12 @@ class InputManager:
         self._running = False
         self._threads: List[threading.Thread] = []
         
-        # Cờ báo hiệu kích hoạt camera (Auth On-Demand)
+        # Auth On-Demand camera activation flag
         self._auth_requested = threading.Event()
 
     def request_face_auth(self):
-        """Được gọi khi UI gửi lệnh xác thực."""
-        logger.info("🔔 Đã nhận lệnh kích hoạt camera từ UI!")
+        """Called when UI sends auth command."""
+        logger.info("🔔 Received camera activation command from UI!")
         self._auth_requested.set()
 
     def set_gateway(self, gateway):
@@ -277,7 +277,7 @@ class InputManager:
         self._gateway = gateway
         if hasattr(gateway, 'set_auth_callback'):
             gateway.set_auth_callback(self.request_face_auth)
-            logger.info("Đã móc nối tín hiệu Auth On-Demand với Gateway.")
+            logger.info("Auth On-Demand signal wired to Gateway.")
 
     def on_event(self, handler: Callable[[ParsedEvent], None]):
         self._event_handlers.append(handler)
@@ -356,12 +356,12 @@ class InputManager:
         )
 
     def _run_camera(self, cam):
-        logger.info("📷 Luồng Camera đã bật")
+        logger.info("📷 Camera stream started")
         
         auto_interval = 3.0 
         last_ai_time = time.time()
         fps_interval = 1.0 / self.config.camera.fps
-        ai_thread = None  # Quản lý luồng AI để tránh mở quá nhiều luồng cùng lúc
+        ai_thread = None  # Manage AI thread to avoid too many concurrent threads
         
         while self._running:
             loop_start = time.time()
@@ -374,13 +374,13 @@ class InputManager:
                     current_time = time.time()
                     
                     if is_manual_trigger or (current_time - last_ai_time >= auto_interval):
-                        # Chỉ kích hoạt AI nếu luồng AI trước đó đã xong (tránh quá tải CPU)
+                        # Only activate AI if previous AI thread is done (avoid CPU overload)
                         if ai_thread is None or not ai_thread.is_alive():
                             if is_manual_trigger:
                                 self._auth_requested.clear()
-                                logger.info("⚡ [ƯU TIÊN] Nhận lệnh từ UI, quét khuôn mặt!")
+                                logger.info("⚡ [PRIORITY] Received UI command, scanning face!")
                             
-                            # TÁCH LUỒNG: Đẩy AI ra chạy ngầm để camera vẫn được đọc liên tục
+                            # SEPARATE THREAD: Offload AI to background so camera keeps reading
                             ai_thread = threading.Thread(
                                 target=self.handle_camera_frame, 
                                 args=(frame,), 
@@ -390,22 +390,22 @@ class InputManager:
                             last_ai_time = current_time
                         else:
                             if is_manual_trigger:
-                                logger.warning("⚠️ Bỏ qua lệnh quét: AI đang bận xử lý khung hình trước đó.")
+                                logger.warning("⚠️ Skipping scan: AI is busy with previous frame.")
                                 self._auth_requested.clear()
                         
             except RuntimeError as e:
-                logger.warning(f"Mất kết nối Camera: {e}. Đang thử kết nối lại...")
-                # THÊM BƯỚC KHÔI PHỤC KẾT NỐI: Đóng và mở lại camera
+                logger.warning(f"Camera disconnected: {e}. Attempting reconnect...")
+                # RECONNECT: Close and reopen camera
                 try:
                     cam.close()
                     time.sleep(1.0)
                     cam.open()
-                    logger.info("✅ Đã kết nối lại Camera thành công!")
+                    logger.info("✅ Camera reconnected successfully!")
                 except Exception as reconnect_err:
-                    logger.error(f"Kết nối lại thất bại: {reconnect_err}")
+                    logger.error(f"Reconnect failed: {reconnect_err}")
                 time.sleep(1.0)
             except Exception as e:
-                logger.error(f"Lỗi không xác định ở camera thread: {e}")
+                logger.error(f"Unknown error in camera thread: {e}")
                 time.sleep(1.0)
                 
             elapsed = time.time() - loop_start

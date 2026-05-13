@@ -46,14 +46,14 @@ export default function CameraCard({ camState, authProgress }) {
               }}
             >
               <div style={{ fontSize: '3rem' }}>❌</div>
-              <div>Không thể kết nối luồng camera</div>
+              <div>Cannot connect to camera stream</div>
               <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>
-                Kiểm tra Backend Python đang chạy tại {BACKEND_URL}
+                Check Python Backend is running at {BACKEND_URL}
               </div>
             </div>
           )}
 
-          {/* Overlay trạng thái xác thực */}
+          {/* Auth status overlay */}
           <div style={{
             position: 'absolute', 
             bottom: '0.5rem', 
@@ -70,7 +70,7 @@ export default function CameraCard({ camState, authProgress }) {
             <div className={styles.camSub}>{camState.sub}</div>
           </div>
 
-          {/* Góc trang trí */}
+          {/* Decorative corners */}
           <div className={styles.corners}>
             <div className={`${styles.c} ${styles.tl}`}/>
             <div className={`${styles.c} ${styles.tr}`}/>
@@ -84,7 +84,7 @@ export default function CameraCard({ camState, authProgress }) {
         </div>
       </div>
 
-      {/* Thanh tiến trình xác thực */}
+      {/* Auth progress bar */}
       {authProgress?.active && (
         <div className={styles.progWrap}>
           <div className={styles.progHd}>

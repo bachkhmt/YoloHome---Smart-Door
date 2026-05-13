@@ -1,20 +1,20 @@
 /**
  * useAdafruitMqtt.js - REST API Version
  * 
- * Phiên bản sử dụng Adafruit REST API (polling) thay vì MQTT
- * Dùng khi MQTT không khả dụng hoặc muốn đơn giản hơn
+ * Uses Adafruit REST API (polling) instead of MQTT
+ * Use when MQTT is unavailable or for simplicity
  */
 
 import { useState, useEffect } from 'react';
 
 // ══════════════════════════════════════════════════════════════
-//  CẤU HÌNH ADAFRUIT IO - Thay đổi theo tài khoản của bạn
+//  ADAFRUIT IO CONFIG — Replace with your credentials
 // ══════════════════════════════════════════════════════════════
 const ADAFRUIT_CONFIG = {
-  username: 'YOUR_ADAFRUIT_USERNAME',  // 👈 Thay bằng username của bạn
-  key: 'YOUR_AIO_KEY',                 // 👈 Thay bằng AIO Key của bạn
+  username: 'YOUR_ADAFRUIT_USERNAME',  // 👈 Replace with your username
+  key: 'YOUR_AIO_KEY',                 // 👈 Replace with your AIO Key
   
-  // Tên các feed trên Adafruit IO
+  // Feed names on Adafruit IO
   feeds: {
     temp: 'temp',
     humidity: 'humidity',
@@ -24,7 +24,7 @@ const ADAFRUIT_CONFIG = {
   }
 };
 
-const POLL_INTERVAL = 2000; // Poll mỗi 2 giây
+const POLL_INTERVAL = 2000; // Poll every 2 seconds
 
 export default function useAdafruitMqtt() {
   const [sensorData, setSensorData] = useState({
@@ -55,7 +55,7 @@ export default function useAdafruitMqtt() {
       const data = await response.json();
       return data.value;
     } catch (err) {
-      console.error(`❌ Lỗi fetch feed ${feedName}:`, err);
+      console.error(`❌ Fetch error feed ${feedName}:`, err);
       return null;
     }
   };
@@ -64,16 +64,16 @@ export default function useAdafruitMqtt() {
   //  POLLING TẤT CẢ FEEDS
   // ══════════════════════════════════════════════════════════════
   useEffect(() => {
-    // Kiểm tra cấu hình
+    // Check configuration
     if (ADAFRUIT_CONFIG.username === 'YOUR_ADAFRUIT_USERNAME' || 
         ADAFRUIT_CONFIG.key === 'YOUR_AIO_KEY') {
-      console.warn('⚠️ Chưa cấu hình Adafruit IO credentials trong useAdafruitMqtt.js');
+      console.warn('⚠️ Adafruit IO credentials not configured in useAdafruitMqtt.js');
       return;
     }
 
     const pollAllFeeds = async () => {
       try {
-        // Fetch song song tất cả feeds
+        // Fetch all feeds in parallel
         const [temp, hum, light, door, face] = await Promise.all([
           fetchFeedData(ADAFRUIT_CONFIG.feeds.temp),
           fetchFeedData(ADAFRUIT_CONFIG.feeds.humidity),
@@ -82,7 +82,7 @@ export default function useAdafruitMqtt() {
           fetchFeedData(ADAFRUIT_CONFIG.feeds.face),
         ]);
 
-        // Cập nhật sensors
+        // Update sensors
         if (temp !== null || hum !== null || light !== null) {
           setSensorData(prev => ({
             temp: temp !== null ? parseFloat(temp) : prev.temp,
@@ -91,12 +91,12 @@ export default function useAdafruitMqtt() {
           }));
         }
 
-        // Cập nhật door state
+        // Update door state
         if (door !== null) {
           setDoorState(door);
         }
 
-        // Cập nhật face detection
+        // Update face detection
         if (face !== null) {
           try {
             const faceData = JSON.parse(face);
@@ -108,22 +108,22 @@ export default function useAdafruitMqtt() {
 
         setConnected(true);
       } catch (err) {
-        console.error('❌ Lỗi polling Adafruit:', err);
+        console.error('❌ Adafruit polling error:', err);
         setConnected(false);
       }
     };
 
-    // Poll ngay lập tức
+    // Poll immediately
     pollAllFeeds();
 
-    // Sau đó poll theo interval
+    // Then poll on interval
     const intervalId = setInterval(pollAllFeeds, POLL_INTERVAL);
 
-    console.log(`📡 Đang polling Adafruit IO mỗi ${POLL_INTERVAL/1000}s`);
+    console.log(`📡 Polling Adafruit IO every ${POLL_INTERVAL/1000}s`);
 
     return () => {
       clearInterval(intervalId);
-      console.log('🛑 Đã dừng polling Adafruit');
+      console.log('🛑 Adafruit polling stopped');
     };
   }, []);
 
@@ -146,7 +146,7 @@ export default function useAdafruitMqtt() {
         console.log('📤 Published door state:', state);
       }
     } catch (err) {
-      console.error('❌ Lỗi publish door state:', err);
+      console.error('❌ Door state publish error:', err);
     }
   };
 

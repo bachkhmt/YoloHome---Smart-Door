@@ -16,24 +16,23 @@ export default function UserManager({ users, addUserLocal, removeUser }) {
   const [loadingId, setLoadingId] = useState(null)
 
   const registerFace = async (userId) => {
-    if (!window.confirm("Hãy đứng trước camera ESP32 và nhấn OK để bắt đầu chụp khuôn mặt.")) return
-    
+    if (!window.confirm("Stand in front of the ESP32 camera and press OK to capture your face.")) return
+
     setLoadingId(userId)
     try {
-      // Gọi trực tiếp đến trạm trung chuyển Python (Port 5050)
       const res = await axios.post(`http://localhost:5050/register_face?user_id=${userId}`)
-      alert(res.data.message || "Đăng ký thành công!")
-      window.location.reload() // Load lại để cập nhật trạng thái face_enrolled
+      alert(res.data.message || "Registration successful!")
+      window.location.reload()
     } catch (err) {
-      alert("Lỗi: " + (err.response?.data?.error || "Không thể kết nối với Backend AI"))
+      alert("Error: " + (err.response?.data?.error || "Cannot connect to AI Backend"))
     } finally {
-      setLoadingId(userId)
+      setLoadingId(null)
     }
   }
 
   return (
     <div className={styles.card}>
-      <div className={styles.label}>👥 Quản Lý Người Dùng</div>
+      <div className={styles.label}>👥 User Management</div>
       <div className={styles.list}>
         {users.map(u => (
           <div key={u.id} className={styles.item}>
@@ -42,10 +41,9 @@ export default function UserManager({ users, addUserLocal, removeUser }) {
               <div className={styles.uname}>{u.name} {u.face_enrolled ? '✅' : '❌'}</div>
               <div className={styles.urole}>{u.role} · #{u.id}</div>
             </div>
-            
-            {/* Nút Đăng ký gương mặt mới */}
-            <button 
-              className={styles.btnAction} 
+
+            <button
+              className={styles.btnAction}
               onClick={() => registerFace(u.id)}
               disabled={loadingId === u.id}
             >
@@ -56,14 +54,14 @@ export default function UserManager({ users, addUserLocal, removeUser }) {
           </div>
         ))}
       </div>
-      <button className={styles.btnAdd} onClick={() => setShowForm(v => !v)}>＋ Thêm Người Dùng</button>
+      <button className={styles.btnAdd} onClick={() => setShowForm(v => !v)}>＋ Add User</button>
       {showForm && (
         <div className={styles.form}>
-          <input className={styles.input} placeholder="Họ và tên" value={name} onChange={e => setName(e.target.value)} />
-          <input className={styles.input} placeholder="Vai trò (Owner / Guest...)" value={role} onChange={e => setRole(e.target.value)} />
+          <input className={styles.input} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} />
+          <input className={styles.input} placeholder="Role (Owner / Guest...)" value={role} onChange={e => setRole(e.target.value)} />
           <div className={styles.btnRow}>
-            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handleAdd}>Xác nhận</button>
-            <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setShowForm(false)}>Hủy</button>
+            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={handleAdd}>Confirm</button>
+            <button className={`${styles.btn} ${styles.btnOutline}`} onClick={() => setShowForm(false)}>Cancel</button>
           </div>
         </div>
       )}

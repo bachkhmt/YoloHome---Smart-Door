@@ -1,27 +1,27 @@
 /**
  * useFaceAuth.js — v3
  *
- * Kiến trúc 2 tầng:
- *  Tầng 1 — MediaPipe FaceDetection  : detect & crop khuôn mặt (mạnh, realtime)
- *  Tầng 2 — face-api.js FaceRecognition: tính 128D descriptor để so sánh danh tính
+ * Two-stage architecture:
+ *  Stage 1 — MediaPipe FaceDetection  : detect & crop face (robust, realtime)
+ *  Stage 2 — face-api.js FaceRecognition: compute 128D descriptor for identity matching
  *
- * Tại sao dùng 2 thư viện?
- *  - TinyFaceDetector (face-api) fail nhiều khi ánh sáng yếu / góc nghiêng
- *  - MediaPipe BlazeFace detect tốt hơn nhiều (dùng trong Google Meet)
- *  - Nhưng MediaPipe không có recognition → dùng face-api chỉ cho phần đó
+ * Why two libraries?
+ *  - TinyFaceDetector (face-api) fails often in low light / angled poses
+ *  - MediaPipe BlazeFace detects much better (used in Google Meet)
+ *  - But MediaPipe has no recognition → use face-api.js for that part only
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import * as faceapi from 'face-api.js'
 
 const MODEL_URL       = '/models'
-const MATCH_THRESHOLD = 0.5   // 0 = giống hệt, 1 = hoàn toàn khác. 0.5 là cân bằng tốt
+const MATCH_THRESHOLD = 0.5   // 0 = identical, 1 = completely different. 0.5 is a good balance
 
-// ── Load MediaPipe qua CDN (không cần npm install) ──────────────
+// ── Load MediaPipe via CDN (no npm install needed) ─────────────
 let mediapipeDetector = null
 
 async function loadMediaPipe() {
   if (mediapipeDetector) return mediapipeDetector
-  // Dùng @mediapipe/tasks-vision qua CDN
+  // Load @mediapipe/tasks-vision via CDN
   const { FaceDetector, FilesetResolver } = await import(
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm'
   )
@@ -46,27 +46,27 @@ export function useFaceAuth() {
   const [loadingModels, setLoadingModels] = useState(false)
   const [error,         setError]         = useState(null)
   const [enrolledUsers, setEnrolledUsers] = useState([])
-  const [debugInfo,     setDebugInfo]     = useState('')  // hiển thị debug realtime
+  const [debugInfo,     setDebugInfo]     = useState('')
 
   const videoRef        = useRef(null)
-  const canvasRef       = useRef(null)   // canvas để vẽ bounding box
+  const canvasRef       = useRef(null)
   const streamRef       = useRef(null)
   const descriptorsRef  = useRef([])
   const modelsLoadedRef = useRef(false)
-  const animFrameRef    = useRef(null)   // requestAnimationFrame ID
+  const animFrameRef    = useRef(null)
 
-  // ── LOAD CẢ 2 MODEL ────────────────────────────────────────────
+  // Load both models
   const loadModels = useCallback(async () => {
     if (modelsLoadedRef.current || loadingModels) return
     setLoadingModels(true)
     setError(null)
     try {
-      // Song song: face-api recognition model + MediaPipe detector
+      // Parallel: face-api recognition model + MediaPipe detector
       await Promise.all([
-        // face-api: chỉ cần landmark + recognition (KHÔNG cần tinyFaceDetector nữa)
+        // face-api: only need landmark + recognition (no tinyFaceDetector)
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
         faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        // MediaPipe: tự tải qua CDN
+        // MediaPipe: auto-downloads via CDN
         loadMediaPipe(),
       ])
       modelsLoadedRef.current = true
@@ -74,8 +74,8 @@ export function useFaceAuth() {
     } catch (e) {
       const isModelFile = e.message?.includes('404') || e.message?.includes('fetch')
       setError(isModelFile
-        ? 'Thiếu file models — cần 4 file trong /public/models/ (xem README.txt)'
-        : 'Lỗi load models: ' + e.message
+        ? 'Missing model files — need 4 files in /public/models/ (see README.txt)'
+        : 'Model load error: ' + e.message
       )
     } finally {
       setLoadingModels(false)
@@ -100,12 +100,12 @@ export function useFaceAuth() {
         })
       }
       setCameraActive(true)
-      startLiveDraw()        // bắt đầu vẽ bounding box realtime
+      startLiveDraw()
     } catch (e) {
       const msg =
-        e.name === 'NotAllowedError' ? 'Cần cho phép quyền camera trong trình duyệt' :
-        e.name === 'NotFoundError'   ? 'Không tìm thấy camera' :
-        'Lỗi camera: ' + e.message
+        e.name === 'NotAllowedError' ? 'Camera permission denied in browser' :
+        e.name === 'NotFoundError'   ? 'No camera found' :
+        'Camera error: ' + e.message
       setError(msg)
     }
   }, [])
@@ -120,7 +120,7 @@ export function useFaceAuth() {
     setDebugInfo('')
   }, [])
 
-  // ── LIVE DRAW — vẽ bounding box lên canvas realtime ───────────
+  // Live-draw bounding box on canvas
   function startLiveDraw() {
     const draw = async () => {
       const video  = videoRef.current
@@ -143,19 +143,19 @@ export function useFaceAuth() {
           const bbox = det.boundingBox
           const conf = Math.round(det.categories[0]?.score * 100) || 0
 
-          // Vẽ box màu xanh
+          // Green bounding box
           ctx.strokeStyle = '#10b981'
           ctx.lineWidth   = 2
           ctx.strokeRect(bbox.originX, bbox.originY, bbox.width, bbox.height)
 
-          // Label confidence
+          // Confidence label
           ctx.fillStyle = '#10b981'
           ctx.font      = '13px monospace'
           ctx.fillText(`${conf}%`, bbox.originX + 4, bbox.originY - 6)
 
-          setDebugInfo(`Phát hiện khuôn mặt — ${conf}% tin cậy`)
+          setDebugInfo(`Face detected — ${conf}% confidence`)
         } else {
-          setDebugInfo('Chưa phát hiện khuôn mặt')
+          setDebugInfo('No face detected')
         }
       } catch (_) {}
 
@@ -164,7 +164,7 @@ export function useFaceAuth() {
     animFrameRef.current = requestAnimationFrame(draw)
   }
 
-  // ── CROP khuôn mặt bằng MediaPipe → canvas ────────────────────
+  // Crop face with MediaPipe → canvas
   async function cropFaceCanvas() {
     const video    = videoRef.current
     const detector = await loadMediaPipe()
@@ -173,14 +173,14 @@ export function useFaceAuth() {
     if (!result.detections.length) return null
 
     const bbox    = result.detections[0].boundingBox
-    const padding = 40  // thêm vùng xung quanh để face-api nhận diện tốt hơn
+    const padding = 40  // add padding for better face-api recognition
 
     const x = Math.max(0, bbox.originX - padding)
     const y = Math.max(0, bbox.originY - padding)
     const w = Math.min(video.videoWidth  - x, bbox.width  + padding * 2)
     const h = Math.min(video.videoHeight - y, bbox.height + padding * 2)
 
-    // Vẽ vùng crop vào canvas tạm
+    // Draw crop region to temp canvas
     const tmp    = document.createElement('canvas')
     tmp.width    = w
     tmp.height   = h
@@ -191,37 +191,37 @@ export function useFaceAuth() {
   // ── ENROLL ─────────────────────────────────────────────────────
   const enrollFace = useCallback(async (userId, name, seed) => {
     if (!modelsLoadedRef.current) {
-      return { ok: false, reason: 'Models chưa load — chờ "✅ Sẵn sàng"' }
+      return { ok: false, reason: 'Models not loaded — wait for "✅ Ready"' }
     }
     if (!streamRef.current) {
-      return { ok: false, reason: 'Camera chưa bật' }
+      return { ok: false, reason: 'Camera not active' }
     }
 
     try {
-      setDebugInfo('Đang detect khuôn mặt...')
+      setDebugInfo('Detecting face...')
 
-      // Bước 1: MediaPipe detect & crop
+      // Step 1: MediaPipe detect & crop
       const faceCanvas = await cropFaceCanvas()
       if (!faceCanvas) {
         return {
           ok: false,
-          reason: 'Không phát hiện khuôn mặt\n→ Nhìn thẳng vào camera, đủ ánh sáng, 30–60cm',
+          reason: 'No face detected\n→ Look straight at camera, good lighting, 30–60cm',
         }
       }
 
-      setDebugInfo('Đang tính face descriptor...')
+      setDebugInfo('Computing face descriptor...')
 
-      // Bước 2: face-api tính 128D descriptor từ vùng crop
+      // Step 2: face-api computes 128D descriptor from crop region
       const detection = await faceapi
         .detectSingleFace(faceCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
 
-      // Fallback: nếu TinyFaceDetector fail trên crop, thử SsdMobilenetv1
+      // Fallback: if TinyFaceDetector fails on crop, try SsdMobilenetv1
       let descriptor = detection?.descriptor
 
       if (!descriptor) {
-        // Thử detect thẳng trên video (không crop)
+        // Try detecting directly on video (no crop)
         const det2 = await faceapi
           .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 }))
           .withFaceLandmarks()
@@ -232,33 +232,33 @@ export function useFaceAuth() {
       if (!descriptor) {
         return {
           ok: false,
-          reason: 'Phát hiện khuôn mặt OK nhưng không tính được descriptor\n→ Đảm bảo đủ 4 file models trong /public/models/',
+          reason: 'Face detected but descriptor computation failed\n→ Ensure 4 model files in /public/models/',
         }
       }
 
-      // Lưu vào ref
+      // Save to ref
       descriptorsRef.current = descriptorsRef.current.filter(d => d.userId !== userId)
       descriptorsRef.current.push({ userId, name, seed, descriptor })
       setEnrolledUsers(descriptorsRef.current.map(d => ({ userId: d.userId, name: d.name })))
-      setDebugInfo(`✅ Đã đăng ký: ${name}`)
+      setDebugInfo(`✅ Enrolled: ${name}`)
 
       return { ok: true, reason: null }
     } catch (e) {
-      return { ok: false, reason: 'Lỗi: ' + e.message }
+      return { ok: false, reason: 'Error: ' + e.message }
     }
   }, [])
 
   // ── RECOGNIZE ──────────────────────────────────────────────────
   const recognizeFace = useCallback(async () => {
-    if (!modelsLoadedRef.current)         return { ok: false, user: null, reason: 'Models chưa load' }
-    if (!streamRef.current)               return { ok: false, user: null, reason: 'Camera chưa bật' }
-    if (!descriptorsRef.current.length)   return { ok: false, user: null, reason: 'Chưa đăng ký khuôn mặt nào — nhấn 📸 Đăng ký trước' }
+    if (!modelsLoadedRef.current)         return { ok: false, user: null, reason: 'Models not loaded' }
+    if (!streamRef.current)               return { ok: false, user: null, reason: 'Camera not active' }
+    if (!descriptorsRef.current.length)   return { ok: false, user: null, reason: 'No enrolled faces — enroll first' }
 
     try {
-      setDebugInfo('Đang nhận diện...')
+      setDebugInfo('Recognizing...')
 
       const faceCanvas = await cropFaceCanvas()
-      if (!faceCanvas) return { ok: false, user: null, reason: 'Không phát hiện khuôn mặt' }
+      if (!faceCanvas) return { ok: false, user: null, reason: 'No face detected' }
 
       const detection = await faceapi
         .detectSingleFace(faceCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 }))
@@ -274,7 +274,7 @@ export function useFaceAuth() {
         descriptor = det2?.descriptor
       }
 
-      if (!descriptor) return { ok: false, user: null, reason: 'Không tính được descriptor' }
+      if (!descriptor) return { ok: false, user: null, reason: 'Descriptor computation failed' }
 
       const labeled = descriptorsRef.current.map(d =>
         new faceapi.LabeledFaceDescriptors(String(d.userId), [d.descriptor])
@@ -283,16 +283,16 @@ export function useFaceAuth() {
       const match   = matcher.findBestMatch(descriptor)
 
       if (match.label === 'unknown') {
-        setDebugInfo('❌ Không khớp')
-        return { ok: false, user: null, reason: `Khuôn mặt không khớp (distance: ${match.distance.toFixed(2)})` }
+        setDebugInfo('❌ No match')
+        return { ok: false, user: null, reason: `Face does not match (distance: ${match.distance.toFixed(2)})` }
       }
 
       const userInfo = descriptorsRef.current.find(d => d.userId === parseInt(match.label))
       const confidence = Math.round((1 - match.distance) * 100)
-      setDebugInfo(`✅ Khớp: ${userInfo?.name} (${confidence}%)`)
+      setDebugInfo(`✅ Matched: ${userInfo?.name} (${confidence}%)`)
       return { ok: true, user: userInfo, confidence, distance: match.distance }
     } catch (e) {
-      return { ok: false, user: null, reason: 'Lỗi nhận diện: ' + e.message }
+      return { ok: false, user: null, reason: 'Recognition error: ' + e.message }
     }
   }, [])
 
