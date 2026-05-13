@@ -67,11 +67,11 @@ def main():
 
     manager.start()
     try:
-        logger.info("Bấm Ctrl+C để dừng hệ thống...")
+        logger.info("Press Ctrl+C to stop...")
         while True:
-            time.sleep(1) # Chạy vòng lặp vô tận
+            time.sleep(1)  # Infinite loop
     except KeyboardInterrupt:
-        logger.info("Đang tắt hệ thống...")
+        logger.info("Shutting down...")
     finally:
         manager.stop()
         gw.stop()

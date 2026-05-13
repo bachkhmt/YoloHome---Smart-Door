@@ -31,17 +31,17 @@ class CameraParser:
         self._last_event_time = 0.0
         self.known_face_encodings = []
         self.known_face_names = []
-        self.last_load_time = 0  # 👈 Thêm biến đếm thời gian
+        self.last_load_time = 0
         self.load_known_faces()
 
     def load_known_faces(self):
-        """Tải danh sách người nhà từ Node.js Server"""
+        """Load known faces list from Node.js Server"""
         self.last_load_time = time.time()
         
         try:
             res = requests.get("http://localhost:3001/api/users/encodings", timeout=5)
             if res.status_code != 200:
-                logger.warning(f"Lỗi từ Node.js Server ({res.status_code}): {res.text}")
+                logger.warning(f"Error from Node.js Server ({res.status_code}): {res.text}")
                 return
             
             data = res.json()
@@ -49,12 +49,12 @@ class CameraParser:
             if isinstance(data, list):
                 self.known_face_encodings = [np.array(u['face_encoding']) for u in data if u.get('face_encoding')]
                 self.known_face_names = [u['name'] for u in data if u.get('face_encoding')]
-                # logger.info(f"Đã cập nhật {len(self.known_face_names)} khuôn mặt người nhà.")
+                # logger.info(f"Updated {len(self.known_face_names)} known faces.")
             else:
-                logger.warning(f"Dữ liệu API không đúng định dạng (không phải mảng): {data}")
+                logger.warning(f"API data invalid format (not an array): {data}")
                 
         except Exception as e:
-            logger.warning(f"Không thể kết nối đến Backend: {e}")
+            logger.warning(f"Cannot connect to Backend: {e}")
 
     def parse(self, frame: CameraFrame) -> Optional[ParsedEvent]:
         """
@@ -77,11 +77,11 @@ class CameraParser:
         # 📸 THÊM ĐOẠN NÀY ĐỂ CHỤP VÀ MÃ HÓA ẢNH
         import cv2
         import base64
-        # Chuyển màu từ RGB (AI dùng) sang BGR (OpenCV dùng để nén ảnh)
+        # Convert color from RGB (AI uses) to BGR (OpenCV uses for compression)
         bgr_img = cv2.cvtColor(frame.frame, cv2.COLOR_RGB2BGR)
-        # Nén thành chuẩn JPEG cho nhẹ
+        # Compress to JPEG for lighter payload
         _, buffer = cv2.imencode('.jpg', bgr_img)
-        # Chuyển thành chuỗi Base64 để gửi qua mạng
+        # Encode to Base64 string for network transfer
         img_b64 = "data:image/jpeg;base64," + base64.b64encode(buffer).decode('utf-8')
         # ---------------------------------------------------------
 
@@ -150,9 +150,9 @@ class CameraParser:
     #     gray_frame = cv2.cvtColor(frame.frame, cv2.COLOR_RGB2GRAY)
     #     faces_detected = self.face_cascade.detectMultiScale(
     #         gray_frame,
-    #         scaleFactor=1.1,   # Hệ số scale ảnh để tìm mặt ở các khoảng cách khác nhau
-    #         minNeighbors=5,    # Số lượng box lân cận để xác nhận là 1 khuôn mặt (giảm nhiễu)
-    #         minSize=(50, 50)   # Kích thước tối thiểu của khuôn mặt
+    #         scaleFactor=1.1,   # Scale factor to find faces at different distances
+    #         minNeighbors=5,    # Number of neighbor boxes to confirm a face (reduce noise)
+    #         minSize=(50, 50)   # Minimum face size
     #     )
     #     result = []
     #     for (x, y, w, h) in faces_detected:
@@ -166,12 +166,12 @@ class CameraParser:
     #         )
     #         result.append(face)
     #     if result:
-    #         logger.info(f"🟢 Phát hiện {len(result)} khuôn mặt tại tọa độ: {[(f.x, f.y) for f in result]}")
+    #         logger.info(f"🟢 Detected {len(result)} faces at: {[(f.x, f.y) for f in result]}")
     #     return result
 
 
     def _detect_faces(self, frame: CameraFrame) -> list:
-        # Tìm vị trí và encoding của tất cả mặt trong ảnh
+        # Find locations and encodings of all faces in image
         face_locations = face_recognition.face_locations(frame.frame)
         face_encodings = face_recognition.face_encodings(frame.frame, face_locations)
 
@@ -179,7 +179,7 @@ class CameraParser:
         for encoding, location in zip(face_encodings, face_locations):
             name = "unknown" 
             
-            # So sánh với người nhà
+            # Compare against known faces
             if self.known_face_encodings:
                 matches = face_recognition.compare_faces(self.known_face_encodings, encoding, tolerance=0.45)
                 if True in matches:

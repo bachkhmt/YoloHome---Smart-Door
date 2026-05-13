@@ -1,6 +1,6 @@
 /**
- * YOLO Home — Express + MySQL Backend  (v2)
- * Chạy: node server/index.js
+ * YOLO Home — Express + MySQL Backend v2
+ * Start: node server/index.js
  */
 
 import express from 'express'
@@ -14,7 +14,7 @@ dotenv.config()
 const app  = express()
 const PORT = process.env.PORT || 3001
 
-// Adafruit IO config (cho auth trigger)
+// Adafruit IO config for auth trigger
 const ADAFRUIT_USERNAME = process.env.ADAFRUIT_USERNAME
 const ADAFRUIT_KEY      = process.env.ADAFRUIT_KEY
 const ADAFRUIT_API      = 'https://io.adafruit.com/api/v2'
@@ -24,7 +24,7 @@ app.use(cors())
 app.use(express.json())
 
 // ══════════════════════════════════════════════════════════════════
-// ⚠️  SOCKET.IO (optional — uncomment nếu muốn real-time push)
+// SOCKET.IO (optional — uncomment for real-time push)
 // ══════════════════════════════════════════════════════════════════
 /*
 import { createServer } from 'http'
@@ -39,11 +39,11 @@ io.on('connection', (socket) => {
   console.log('Client connected:', socket.id)
 })
  
-// Sau khi lưu DB, emit event:
+// After DB save, emit event:
 // io.emit('sensor:update', { temp, hum, light })
 // io.emit('log:new', { user_name, action, success })
  
-// Cuối file thay app.listen → httpServer.listen
+// Replace app.listen → httpServer.listen at bottom of file
 */
 // ══════════════════════════════════════════════════════════════════
 
@@ -54,7 +54,7 @@ async function getPool() {
   if (pool) return pool;
 
   if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
-    console.error("❌ LỖI NGHIÊM TRỌNG: Thiếu thông tin cấu hình Database trong file .env!");
+    console.error("FATAL: Missing database config in .env file!");
     process.exit(1); 
   }
 
@@ -89,7 +89,7 @@ app.get('/api/health', async (req, res) => {
   }
 })
 
-// Dashboard summary (dùng VIEW v_dashboard_summary)
+// Dashboard summary via v_dashboard_summary view
 app.get('/api/summary', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM v_dashboard_summary')
@@ -112,45 +112,10 @@ app.get('/api/users', async (req, res) => {
   }
 })
 
-// 1. Lấy danh sách encodings của tất cả người nhà (cho Python tải về lúc khởi động)
-app.get('/api/users/encodings', async (req, res) => {
-  try {
-    const rows = await query(
-      'SELECT id, name, face_encoding FROM users WHERE face_enrolled = 1 AND online = 1'
-    )
-    // Chuyển string JSON từ DB thành object mảng cho Python dễ đọc
-    const usersWithEncodings = rows.map(u => ({
-      ...u,
-      face_encoding: typeof u.face_encoding === 'string' ? JSON.parse(u.face_encoding) : u.face_encoding
-    }))
-    res.json(usersWithEncodings)
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
-// 2. Cập nhật khuôn mặt cho User cụ thể
-app.patch('/api/users/:id/face', async (req, res) => {
-  try {
-    const { face_encoding } = req.body // Nhận mảng 128 số từ Python gửi lên
-    if (!face_encoding || !Array.isArray(face_encoding)) {
-      return res.status(400).json({ error: 'Dữ liệu khuôn mặt không hợp lệ' })
-    }
-
-    await query(
-      'UPDATE users SET face_encoding = ?, face_enrolled = 1 WHERE id = ?',
-      [JSON.stringify(face_encoding), req.params.id]
-    )
-    res.json({ ok: true, message: 'Đã lưu khuôn mặt thành công' })
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
 app.get('/api/users/:id', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM users WHERE id = ?', [req.params.id])
-    if (!rows.length) return res.status(404).json({ error: 'Không tìm thấy' })
+    if (!rows.length) return res.status(404).json({ error: 'Not found' })
     res.json(rows[0])
   } catch (e) {
     res.status(500).json({ error: e.message })
@@ -160,7 +125,7 @@ app.get('/api/users/:id', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     const { name, role, seed, face_enrolled, voice_enrolled } = req.body
-    if (!name?.trim()) return res.status(400).json({ error: 'Thiếu tên' })
+    if (!name?.trim()) return res.status(400).json({ error: 'Name is required' })
     const result = await query(
       `INSERT INTO users (name, role, seed, online, face_enrolled, voice_enrolled)
        VALUES (?, ?, ?, 1, ?, ?)`,
@@ -210,7 +175,7 @@ app.delete('/api/users/:id', async (req, res) => {
 app.get('/api/logs', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200)
-    // Dùng VIEW để kèm role của user
+    // Use VIEW to include user role
     const rows = await query(
       `SELECT * FROM v_access_log_full ORDER BY created_at DESC LIMIT ?`,
       [limit]
@@ -225,23 +190,23 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/logs', async (req, res) => {
   try {
     const { user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address } = req.body
-    console.log(`\n[BACKEND - LỊCH SỬ] Nhận thông báo: ${user_name} vừa ra vào bằng ${method || 'Face ID'}. Đang lưu vào MySQL...`);
+    console.log(`\n[BACKEND] Access event: ${user_name} via ${method || 'Face ID'}. Saving to MySQL...`);
     await query(
       `INSERT INTO access_logs
          (user_id, user_name, method, action, success, fail_reason, latency_ms, ip_address)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         user_id   || null,
-        user_name || 'Không xác định',
+        user_name || 'Unknown',
         method    || 'Face',
-        action    || 'Vào',
+        action    || 'Enter',
         success   ? 1 : 0,
         fail_reason   || null,
         latency_ms    || null,
         ip_address    || null,
       ]
     )
-    // FR10: Kiểm tra thất bại liên tiếp trong 60 giây → tạo cảnh báo
+    // Check consecutive failures within 60s → create security alert
     if (!success) {
       const recentFails = await query(
         `SELECT COUNT(*) AS cnt FROM access_logs
@@ -254,7 +219,7 @@ app.post('/api/logs', async (req, res) => {
              (alert_type, severity, message, related_user_id)
            VALUES ('multiple_fail', 'high', ?, ?)`,
           [
-            `${recentFails[0].cnt} lần xác thực thất bại trong 60 giây`,
+            `${recentFails[0].cnt} failed auth attempts in 60 seconds`,
             user_id || null,
           ]
         )
@@ -297,7 +262,7 @@ app.post('/api/door/state', async (req, res) => {
   }
 })
 
-// Lịch sử thay đổi trạng thái cửa
+// Door state change history
 app.get('/api/door/history', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 20, 100)
@@ -314,11 +279,11 @@ app.get('/api/door/history', async (req, res) => {
   }
 })
 
-// ── Helper: publish lên Adafruit IO feed ──────────────────────────
+// Publish value to Adafruit IO feed
 async function publishToAdafruit(feedKey, value) {
   const username = process.env.ADAFRUIT_USERNAME
   const key      = process.env.ADAFRUIT_KEY
-  if (!username || !key) throw new Error('Thiếu ADAFRUIT_USERNAME hoặc ADAFRUIT_KEY trong .env')
+  if (!username || !key) throw new Error('Missing ADAFRUIT_USERNAME or ADAFRUIT_KEY in .env')
   await axios.post(
     `https://io.adafruit.com/api/v2/${username}/feeds/${feedKey}/data`,
     { value: String(value) },
@@ -327,16 +292,16 @@ async function publishToAdafruit(feedKey, value) {
 }
 
 // ── POST /api/door/unlock ──────────────────────────────────────────
-// HeroCard gọi khi ấn nút 🔓 Mở
+// Called when HeroCard Unlock button is pressed
 app.post('/api/door/unlock', async (req, res) => {
   try {
-    console.log('\n🔓 [DOOR] Nhận lệnh MỞ KHÓA từ Dashboard')
+    console.log('\n🔓 [DOOR] UNLOCK command from Dashboard')
 
-    // 1. Publish lên Adafruit → Python nhận qua MQTT → điều khiển hardware
+    // 1. Publish to Adafruit → Python receives via MQTT → controls hardware
     await publishToAdafruit('yolohome.door-lock', 'UNLOCK')
-    console.log('📤 [DOOR] Đã publish UNLOCK → Adafruit yolohome.door-lock')
+    console.log('📤 [DOOR] Published UNLOCK → Adafruit yolohome.door-lock')
 
-    // 2. Lưu trạng thái vào DB
+    // 2. Save state to DB
     await query(
       `INSERT INTO door_state (locked, source) VALUES (0, 'dashboard')`,
     )
@@ -346,26 +311,26 @@ app.post('/api/door/unlock', async (req, res) => {
       `INSERT INTO access_logs (user_name, method, action, success)
        VALUES ('Dashboard', 'Manual', 'door_unlock', 1)`
     )
-    console.log('📝 [DOOR] Đã ghi log: door_unlock')
+    console.log('📝 [DOOR] Logged: door_unlock')
 
-    res.json({ ok: true, message: 'Đã gửi lệnh mở khóa' })
+    res.json({ ok: true, message: 'Unlock command sent' })
   } catch (e) {
-    console.error('[DOOR UNLOCK] ❌ Lỗi:', e.message)
+    console.error('[DOOR UNLOCK] ❌ Error:', e.message)
     res.status(500).json({ error: e.message })
   }
 })
 
 // ── POST /api/door/lock ────────────────────────────────────────────
-// HeroCard gọi khi ấn nút 🔒 Khóa
+// Called when HeroCard Lock button is pressed
 app.post('/api/door/lock', async (req, res) => {
   try {
-    console.log('\n🔒 [DOOR] Nhận lệnh KHÓA CỬA từ Dashboard')
+    console.log('\n🔒 [DOOR] LOCK command from Dashboard')
 
-    // 1. Publish lên Adafruit → Python nhận qua MQTT → điều khiển hardware
+    // 1. Publish to Adafruit → Python receives via MQTT → controls hardware
     await publishToAdafruit('yolohome.door-lock', 'LOCK')
-    console.log('📤 [DOOR] Đã publish LOCK → Adafruit yolohome.door-lock')
+    console.log('📤 [DOOR] Published LOCK → Adafruit yolohome.door-lock')
 
-    // 2. Lưu trạng thái vào DB
+    // 2. Save state to DB
     await query(
       `INSERT INTO door_state (locked, source) VALUES (1, 'dashboard')`,
     )
@@ -375,11 +340,11 @@ app.post('/api/door/lock', async (req, res) => {
       `INSERT INTO access_logs (user_name, method, action, success)
        VALUES ('Dashboard', 'Manual', 'door_lock', 1)`
     )
-    console.log('📝 [DOOR] Đã ghi log: door_lock')
+    console.log('📝 [DOOR] Logged: door_lock')
 
-    res.json({ ok: true, message: 'Đã gửi lệnh khóa cửa' })
+    res.json({ ok: true, message: 'Lock command sent' })
   } catch (e) {
-    console.error('[DOOR LOCK] ❌ Lỗi:', e.message)
+    console.error('[DOOR LOCK] ❌ Error:', e.message)
     res.status(500).json({ error: e.message })
   }
 })
@@ -398,7 +363,7 @@ app.get('/api/sensors/latest', async (req, res) => {
   }
 })
 
-// Lịch sử cảm biến (dùng cho chart realtime)
+// Sensor history (for real-time chart)
 app.get('/api/sensors/history', async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit)  || 50,  500)
@@ -409,7 +374,7 @@ app.get('/api/sensors/history', async (req, res) => {
        ORDER BY created_at DESC LIMIT ?`,
       [device, device, limit]
     )
-    res.json(rows.reverse()) // trả về theo thứ tự thời gian tăng dần
+    res.json(rows.reverse()) // return in chronological order
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -418,7 +383,7 @@ app.get('/api/sensors/history', async (req, res) => {
 app.post('/api/sensors', async (req, res) => {
   try {
     const { temp, hum, light, device_id } = req.body
-    // console.log(`🌡️ [BACKEND - SENSOR] Nhận dữ liệu môi trường mới: ${temp}°C, Độ ẩm: ${hum}%, Ánh sáng: ${light} lux. Đang lưu DB...`);
+    // console.log(`🌡️ [BACKEND - SENSOR] New sensor data: ${temp}°C, Humidity: ${hum}%, Light: ${light} lux. Saving to DB...`);
     await query(
       `INSERT INTO sensor_readings (temp, hum, light, device_id) VALUES (?, ?, ?, ?)`,
       [temp, hum, light, device_id || null]
@@ -448,7 +413,7 @@ app.get('/api/remote', async (req, res) => {
   }
 })
 
-// YOLO:Bit polling — lấy lệnh pending mới nhất
+// YOLO:Bit polling — fetch latest pending command
 app.get('/api/remote/pending', async (req, res) => {
   try {
     const device = req.query.device || null
@@ -468,8 +433,8 @@ app.get('/api/remote/pending', async (req, res) => {
 app.post('/api/remote', async (req, res) => {
   try {
     const { user_id, command, payload, device_target } = req.body
-    console.log(`⚡ [BACKEND - ĐIỀU KHIỂN] Nhận lệnh [${command}] từ Web gửi xuống thiết bị [${device_target}].`);
-    if (!user_id || !command) return res.status(400).json({ error: 'Thiếu user_id hoặc command' })
+    console.log(`⚡ [BACKEND] Received command [${command}] from Web to device [${device_target}].`);
+    if (!user_id || !command) return res.status(400).json({ error: 'Missing user_id or command' })
     const result = await query(
       `INSERT INTO remote_controls (user_id, command, payload, device_target)
        VALUES (?, ?, ?, ?)`,
@@ -482,7 +447,7 @@ app.post('/api/remote', async (req, res) => {
   }
 })
 
-// YOLO:Bit xác nhận đã nhận lệnh
+// YOLO:Bit acknowledges command receipt
 app.patch('/api/remote/:id/ack', async (req, res) => {
   try {
     await query(
@@ -534,7 +499,7 @@ app.post('/api/backups', async (req, res) => {
   }
 })
 
-// Cập nhật trạng thái backup (running → success/failed)
+// Update backup status (running → success/failed)
 app.patch('/api/backups/:id', async (req, res) => {
   try {
     const { status, file_size_kb } = req.body
@@ -555,7 +520,7 @@ app.patch('/api/backups/:id', async (req, res) => {
 // ══════════════════════════════════════════════════════════════════
 app.get('/api/alerts', async (req, res) => {
   try {
-    // Mặc định chỉ lấy chưa giải quyết, ?all=1 lấy tất cả
+    // Default: only unresolved, ?all=1 returns all
     const all = req.query.all === '1'
     const rows = await query(
       all
@@ -583,7 +548,7 @@ app.post('/api/alerts', async (req, res) => {
   }
 })
 
-// Đánh dấu đã giải quyết
+// Mark as resolved
 app.patch('/api/alerts/:id/resolve', async (req, res) => {
   try {
     const { resolved_by } = req.body
@@ -612,25 +577,25 @@ app.get('/api/chart/weekly', async (req, res) => {
 })
 
 // ══════════════════════════════════════════════════════════════════
-//  AUTH TRIGGER — React UI bấm nút → publish Adafruit → Python detect ngay
+//  AUTH TRIGGER — React UI button → publish to Adafruit → Python detects immediately
 // ══════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════
-//  AUTH TRIGGER — Nhận lệnh ưu tiên từ React UI và đẩy lên Adafruit
+//  AUTH TRIGGER — Receive priority command from React UI and push to Adafruit
 // ══════════════════════════════════════════════════════════════════
 app.post('/api/auth/trigger', async (req, res) => {
   try {
     const ADAFRUIT_USERNAME = process.env.ADAFRUIT_USERNAME;
     const ADAFRUIT_KEY      = process.env.ADAFRUIT_KEY;
-    const AUTH_FEED         = 'yolohome.auth-trigger'; // Đảm bảo Feed này đã được tạo trên Adafruit
+    const AUTH_FEED         = 'yolohome.auth-trigger'; // Ensure this Feed exists on Adafruit
 
     if (!ADAFRUIT_USERNAME || !ADAFRUIT_KEY) {
-      return res.status(500).json({ error: 'Thiếu cấu hình ADAFRUIT trong .env' });
+      return res.status(500).json({ error: 'Missing ADAFRUIT config in .env' });
     }
 
     const timestamp = Date.now();
-    console.log(`\n🔍 [AUTH TRIGGER] UI yêu cầu xác thực ưu tiên (ts=${timestamp})`);
+    console.log(`\n🔍 [AUTH TRIGGER] UI requested priority auth (ts=${timestamp})`);
 
-    // Bắn tín hiệu lên Adafruit IO
+    // Fire signal to Adafruit IO
     await axios.post(
       `https://io.adafruit.com/api/v2/${ADAFRUIT_USERNAME}/feeds/${AUTH_FEED}/data`,
       { value: timestamp.toString() },
@@ -640,10 +605,10 @@ app.post('/api/auth/trigger', async (req, res) => {
       }
     );
 
-    res.json({ success: true, message: 'Đã gửi lệnh ưu tiên cho Camera' });
+    res.json({ success: true, message: 'Priority command sent to Camera' });
   } catch (e) {
-    console.error('[AUTH TRIGGER] ❌ Lỗi:', e.message);
-    res.status(500).json({ error: 'Lỗi kết nối tới Broker' });
+    console.error('[AUTH TRIGGER] ❌ Error:', e.message);
+    res.status(500).json({ error: 'Broker connection error' });
   }
 });
 

@@ -1,14 +1,14 @@
 """
 YOLO Home — Gateway Bridge (gateway_bridge.py)
 ================================================
-Mở rộng Gateway gốc để ghi dữ liệu vào MySQL qua Node/Express server
-có sẵn tại server/index.js (port 3001).
+Extends the base Gateway to write data to MySQL via the Node/Express server
+running at server/index.js (port 3001).
 
-KHÔNG cần FastAPI, KHÔNG cần db.py — Node server đã xử lý hết.
+No FastAPI or db.py needed — Node server handles everything.
 
-Đặt file này vào: YOLOHOME/ (cùng cấp với run.sh, pyproject.toml)
+Place this file in: YOLOHOME/ (sibling of run.sh, pyproject.toml)
 
-Cách dùng — trong run.py:
+Usage in run.py:
     from gateway_bridge import BridgeGateway as Gateway
 """
 
@@ -24,7 +24,7 @@ from yolohome.config import AppConfig
 
 logger = logging.getLogger("yolohome.bridge")
 
-# ── Trỏ vào Node/Express server có sẵn (server/index.js) ─────────
+# Point at the existing Node/Express server
 API_BASE = "http://localhost:3001"
 
 
@@ -60,7 +60,7 @@ def _patch(path: str, data: dict = None, timeout: float = 2.0):
 
 class BridgeGateway(Gateway):
     """
-    Gateway mở rộng: Adafruit IO (parent) + ghi DB qua Node server.
+    Extended Gateway: Adafruit IO (parent) + writes DB via Node server.
 
     Trong run.py:
         gw = BridgeGateway(config)
@@ -72,8 +72,8 @@ class BridgeGateway(Gateway):
     """
 
     def sync_event(self, event: ParsedEvent):
-        super().sync_event(event)   # Adafruit IO như cũ
-        self._sync_to_db(event)     # thêm: ghi vào DB qua Node
+        super().sync_event(event)   # Adafruit IO as before
+        self._sync_to_db(event)     # also write to DB via Node
 
     def _sync_to_db(self, event: ParsedEvent):
 
@@ -86,7 +86,7 @@ class BridgeGateway(Gateway):
                 "device_id": event.source,
             })
 
-        # FACE_DETECTED → /api/logs  (Node tự tạo alert nếu fail ≥ 3/60s)
+        # FACE_DETECTED → /api/logs  (Node creates alert if ≥ 3 fails / 60s)
         elif event.event_type == EventType.FACE_DETECTED:
             faces   = event.data.get("faces", [])
             label   = faces[0].get("label", "unknown") if faces else "unknown"
@@ -94,43 +94,43 @@ class BridgeGateway(Gateway):
             latency = int((time.time() - event.timestamp) * 1000)
 
             _post("/api/logs", {
-                "user_name":  label if success else "Không xác định",
+                "user_name":  label if success else "Unknown",
                 "method":     "Face",
-                "action":     "Vào",
+                "action":     "Enter",
                 "success":    success,
                 "latency_ms": latency,
-                "fail_reason": None if success else "Khuôn mặt không nhận ra",
+                "fail_reason": None if success else "Face not recognized",
             })
 
             if success:
                 _post("/api/door/state", {"locked": False, "source": "yolobit"})
 
-        # SOUND_DETECTED → /api/logs (chỉ log knock/doorbell, bỏ ambient)
+        # SOUND_DETECTED → /api/logs (only knock/doorbell, skip ambient)
         elif event.event_type == EventType.SOUND_DETECTED:
             sound_type = event.data.get("sound_type", "ambient")
             if sound_type in ("tonal", "impulse"):
                 _post("/api/logs", {
-                    "user_name": "Không xác định",
+                    "user_name": "Unknown",
                     "method":    "Voice" if sound_type == "tonal" else "Knock",
-                    "action":    "Thử",
+                    "action":    "Attempt",
                     "success":   False,
                 })
 
-        # BUTTON_TRIGGER / DOOR_UNLOCK_REQUEST → mở cửa + log
+        # BUTTON_TRIGGER / DOOR_UNLOCK_REQUEST → unlock door + log
         elif event.event_type in (EventType.BUTTON_TRIGGER, EventType.DOOR_UNLOCK_REQUEST):
             _post("/api/door/state", {"locked": False, "source": "yolobit"})
             _post("/api/logs", {
                 "user_name": "YOLO:Bit",
                 "method":    "Button",
-                "action":    "Vào",
+                "action":    "Enter",
                 "success":   True,
             })
 
     def poll_controls_loop(self, interval: float = 1.5):
         """
-        Daemon thread — poll GET /api/remote/pending mỗi 1.5s.
-        Node server trả về lệnh pending mới nhất (null nếu không có).
-        Sau khi thực thi, PATCH /api/remote/:id/ack để không gửi lại.
+        Daemon thread — polls GET /api/remote/pending every 1.5s.
+        Node server returns the latest pending command (null if none).
+        After execution, PATCH /api/remote/:id/ack to acknowledge.
         """
         logger.info(f"Poll loop → {API_BASE}/api/remote/pending")
         while True:

@@ -4,13 +4,13 @@ export default function SystemStats({ sysStats }) {
   const items = [
     { label: 'CPU',      value: sysStats.cpu + '%',   color: 'var(--theme)'   },
     { label: 'RAM',      value: sysStats.ram + '%',   color: 'var(--theme2)'  },
-    { label: 'Mạng',     value: sysStats.net ? 'OK' : 'WEAK', color: sysStats.net ? 'var(--success)' : 'var(--warn)' },
+    { label: 'Network',  value: sysStats.net ? 'OK' : 'WEAK', color: sysStats.net ? 'var(--success)' : 'var(--warn)' },
     { label: 'Latency',  value: sysStats.latency + 'ms', color: 'var(--theme)' },
-    { label: 'Accuracy', value: '97.8%',              color: 'var(--success)' }, //hardcode
+    { label: 'Accuracy', value: '97.8%',              color: 'var(--success)' },
   ]
   return (
     <div className={styles.card}>
-      <div className={styles.label}>🖥️ Hệ Thống</div>
+      <div className={styles.label}>🖥️ System</div>
       <div className={styles.grid}>
         {items.map(item => (
           <div key={item.label} className={styles.item}>

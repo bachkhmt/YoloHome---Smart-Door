@@ -1,7 +1,7 @@
 """
 IoT Gateway — unified interface for server communication.
 
-FIXED: Thêm publish door state lên Adafruit khi mở/khóa cửa thành công.
+FIXED: Publish door state to Adafruit on successful lock/unlock.
 """
 
 import json
@@ -34,17 +34,17 @@ FEEDS = {
 
 class Gateway:
     """
-    Unified IoT gateway — tất cả module giao tiếp với server qua class này.
+    Unified IoT gateway — all modules communicate with the server through this class.
 
     Public API:
-        start()               — kết nối MQTT + subscribe tất cả feed
-        stop()                — ngắt kết nối
-        sync_event(event)     — Python/AI module gửi ParsedEvent vào đây
-        send_command(cmd)     — điều khiển thiết bị đầu ra
-        subscribe(feed, cb)   — đăng ký lắng nghe feed bất kỳ
-        publish(feed, val)    — publish thẳng lên Adafruit qua REST
+        start()               — connect MQTT + subscribe all feeds
+        stop()                — disconnect
+        sync_event(event)     — Python/AI module sends ParsedEvent here
+        send_command(cmd)     — control output devices
+        subscribe(feed, cb)   — listen to any feed
+        publish(feed, val)    — publish directly to Adafruit via REST
 
-        set_auth_callback(cb) — đăng ký callback khi có INSTANT trigger từ UI
+        set_auth_callback(cb) — register callback for INSTANT trigger from UI
     """
 
     def __init__(self, config: Optional[AppConfig] = None):
@@ -72,21 +72,21 @@ class Gateway:
     # ══════════════════════════════════════════════════════
 
     def start(self):
-        """Kết nối MQTT và subscribe tất cả feed cần thiết."""
+        """Connect MQTT and subscribe to all required feeds."""
         self.mqtt.connect()
 
-        # Flow A: cảm biến môi trường từ mạch thật
+        # Flow A: environmental sensors from real hardware
         self.subscribe(FEEDS["temperature"], self._on_sensor_update)
         self.subscribe(FEEDS["light"],       self._on_sensor_update)
         self.subscribe(FEEDS["sound"],       self._on_sensor_update)
 
-        # Flow B: kết quả nhận diện khuôn mặt
+        # Flow B: face recognition results
         self.subscribe(FEEDS["face"],        self._on_face_update)
 
-        # Flow C: lệnh từ Adafruit Dashboard / Frontend
+        # Flow C: commands from Adafruit Dashboard / Frontend
         self.subscribe(FEEDS["door_lock"],   self._on_door_command_from_cloud)
 
-        # Flow D: INSTANT trigger từ React UI bấm nút "Xác Thực"
+        # Flow D: INSTANT trigger from React UI "Authenticate" button
         self.subscribe(FEEDS["auth_trigger"], self._on_auth_trigger)
 
         logger.info("Gateway started — subscribed to all feeds")
@@ -96,7 +96,7 @@ class Gateway:
         logger.info("Gateway stopped")
 
     # ══════════════════════════════════════════════════════
-    # Flow A: Mạch thật → Adafruit → Python → Node.js
+    # Flow A: Hardware → Adafruit → Python → Node.js
     # ══════════════════════════════════════════════════════
 
     def _on_sensor_update(self, update: FeedUpdate):
@@ -108,7 +108,7 @@ class Gateway:
         try:
             value = float(raw)
         except (ValueError, TypeError):
-            logger.warning(f"Giá trị không hợp lệ từ {feed_key}: {raw!r}")
+            logger.warning(f"Invalid value from {feed_key}: {raw!r}")
             return
 
         FEED_TO_FIELD = {
@@ -126,42 +126,42 @@ class Gateway:
 
     def _on_face_update(self, update: FeedUpdate):
         """
-        Xử lý kết quả nhận diện — được gọi sau CẢ HAI loại detect:
-          • Auto detect từ vòng loop liên tục
-          • Instant detect từ UI trigger
+        Process recognition results — called after BOTH detection types:
+          • Auto detect from continuous loop
+          • Instant detect from UI trigger
 
-        FIXED: Tự động mở cửa nếu nhận ra người quen,
-               và PUBLISH trạng thái "UNLOCK" lên Adafruit.
+        FIXED: Auto-unlock door if known person recognized,
+               and PUBLISH "UNLOCK" state to Adafruit.
         """
         logger.info(f"[ADA→PY] Face update: {update.value}")
 
         try:
             data = json.loads(update.value)
         except (json.JSONDecodeError, TypeError):
-            logger.warning(f"Face update payload không hợp lệ: {update.value!r}")
+            logger.warning(f"Invalid face update payload: {update.value!r}")
             return
 
         label      = data.get("label", "unknown")
         is_known   = data.get("known", False)
         confidence = data.get("confidence", 0.0)
 
-        # Log về Node.js để hiển thị lên React AccessLog + ActivityChart
+        # Log to Node.js for React AccessLog + ActivityChart display
         self._post_to_nodejs("/logs", {
             "user_id":     data.get("user_id"),
             "user_name":   label,
             "method":      "Face",
-            "action":      "Vào",
+            "action":      "Enter",
             "success":     1 if is_known else 0,
-            "fail_reason": None if is_known else "Người lạ",
+            "fail_reason": None if is_known else "Stranger",
             "latency_ms":  None,
             "ip_address":  None,
         })
 
-        # Tự động mở cửa nếu nhận ra người quen
+        # Auto-unlock door if known person recognized
         if is_known:
-            logger.info(f"🔓 Chào {label}! Đang mở cửa...")
+            logger.info(f"🔓 Hello {label}! Unlocking door...")
             
-            # ✅ FIX CHÍNH: Publish trạng thái cửa lên Adafruit
+            # MAIN FIX: Publish door state to Adafruit
             self.mqtt.publish(FEEDS["door_lock"], "UNLOCK")
             logger.info("📤 [PY→ADA] Published door state: UNLOCK")
 
@@ -171,34 +171,34 @@ class Gateway:
 
     def _on_door_command_from_cloud(self, update: FeedUpdate):
         """
-        Nhận lệnh UNLOCK/LOCK từ Frontend (qua Adafruit).
+        Receive UNLOCK/LOCK commands from Frontend (via Adafruit).
         
         Flow:
-          1. Frontend publish "UNLOCK" lên yolohome.door-lock
-          2. Python nhận được ở đây
-          3. Điều khiển hardware (ESP32-CAM flash LED)
+          1. Frontend publishes "UNLOCK" to yolohome.door-lock
+          2. Python receives it here
+          3. Controls hardware (ESP32-CAM flash LED)
         """
         action = update.value.strip().upper()
-        logger.info(f"[CLOUD→PY] Lệnh cửa từ Frontend/Dashboard: {action}")
+        logger.info(f"[CLOUD→PY] Door command from Frontend/Dashboard: {action}")
 
-        # Điều khiển ESP32-CAM flash LED
+        # Control ESP32-CAM flash LED
         if action == "UNLOCK":
-            logger.info("🔓 Đang thực hiện mở khóa (Bật Flash)...")
+            logger.info("🔓 Unlocking (Flash ON)...")
             try:
                 requests.get("http://192.168.1.131/control?var=led_intensity&val=10", timeout=1)
-                logger.info("Đã bật Flash LED")
+                logger.info("Flash LED ON")
             except Exception as e:
-                logger.error(f"❌ Lỗi điều khiển thiết bị: {e}")
+                logger.error(f"❌ Device control error: {e}")
                 
         elif action == "LOCK":
-            logger.info("🔒 Đang thực hiện khóa (Tắt Flash)...")
+            logger.info("🔒 Locking (Flash OFF)...")
             try:
                 requests.get("http://192.168.1.131/control?var=led_intensity&val=0", timeout=1)
-                logger.info("Đã tắt Flash LED")
+                logger.info("Flash LED OFF")
             except Exception as e:
-                logger.error(f"❌ Lỗi điều khiển thiết bị: {e}")
+                logger.error(f"❌ Device control error: {e}")
 
-        # Log vào Node.js
+        # Log to Node.js
         self._post_to_nodejs("/logs", {
             "user_id":     None,
             "user_name":   "Dashboard",
@@ -211,18 +211,18 @@ class Gateway:
         })
 
     # ══════════════════════════════════════════════════════
-    # Flow D: React UI bấm nút → INSTANT detect
+    # Flow D: React UI button → INSTANT detect
     # ══════════════════════════════════════════════════════
 
     def _on_auth_trigger(self, update: FeedUpdate):
         """
-        Callback khi nhận INSTANT trigger từ React UI.
+        Callback when receiving INSTANT trigger from React UI.
 
-        Lưu ý: Camera vẫn đang auto detect liên tục theo loop.
-        Callback này chỉ kích hoạt thêm 1 lần detect NGAY LẬP TỨC
-        khi user chủ động bấm nút, không liên quan đến loop chính.
+        Note: Camera continues auto-detecting via its loop.
+        This callback only triggers one additional IMMEDIATE detection
+        when the user clicks the button — independent of the main loop.
         """
-        logger.info(f"[UI→ADA→PY] 🔔 Nhận instant trigger: {update.value}")
+        logger.info(f"[UI→ADA→PY] 🔔 Received instant trigger: {update.value}")
 
         if self._auth_callback:
             try:
@@ -231,24 +231,24 @@ class Gateway:
                 logger.error(f"Auth callback error: {e}", exc_info=True)
         else:
             logger.warning(
-                "⚠️ Nhận instant trigger nhưng chưa có callback\n"
-                "   → Gọi gateway.set_auth_callback() để đăng ký"
+                "⚠️ Received instant trigger but no callback registered\n"
+                "   → Call gateway.set_auth_callback() to register"
             )
 
     def set_auth_callback(self, callback: Callable[[], None]):
         """
-        Đăng ký callback cho INSTANT trigger từ UI bấm nút "Xác Thực".
+        Register callback for INSTANT trigger from UI "Authenticate" button.
 
-        Callback này được gọi song song với auto detect loop —
-        camera vẫn chạy liên tục, đây chỉ là detect thêm ngay lập tức.
+        This callback runs in parallel with the auto detect loop —
+        camera keeps running, this is just an additional instant detection.
 
-        Callback nên:
-          1. Chạy trong thread riêng (không block MQTT)
-          2. Dùng lock nếu dùng chung camera với auto loop
+        Callback should:
+          1. Run in a separate thread (don't block MQTT)
+          2. Use lock if sharing camera with auto loop
 
         Example:
             def on_instant_trigger():
-                # Chạy trong thread riêng, dùng lock chung với auto loop
+                # Run in separate thread, share lock with auto loop
                 with detect_lock:
                     frame = camera.capture_once()
                     result = face_parser.parse(frame)
@@ -257,10 +257,10 @@ class Gateway:
             gateway.set_auth_callback(on_instant_trigger)
         """
         self._auth_callback = callback
-        logger.info("Instant auth trigger callback đã được đăng ký")
+        logger.info("Instant auth trigger callback registered")
 
     # ══════════════════════════════════════════════════════
-    # sync_event — Python/AI modules gọi vào đây
+    # sync_event — Python/AI modules call here
     # ══════════════════════════════════════════════════════
 
     def sync_event(self, event: ParsedEvent):
@@ -298,7 +298,7 @@ class Gateway:
 
         for face in faces:
             label    = face.get("label", "unknown")
-            is_known = label not in ("unknown", "Người lạ")
+            is_known = label not in ("unknown", "Stranger")
             self.mqtt.publish(FEEDS["face"], json.dumps({
                 "label":      label,
                 "known":      is_known,
@@ -313,7 +313,7 @@ class Gateway:
         self._post_to_nodejs("/logs", {
             "user_id": None, "user_name": "System", "method": "Sound",
             "action": "sound_alert", "success": 0,
-            "fail_reason": "Âm thanh bất thường",
+            "fail_reason": "Abnormal sound",
             "latency_ms": None, "ip_address": None,
         })
 
@@ -336,7 +336,7 @@ class Gateway:
         self.mqtt.subscribe(feed_key, callback)
 
     def on_door_command(self, callback: Callable[[FeedUpdate], None]):
-        """DEPRECATED: Dùng subscribe() trực tiếp."""
+        """DEPRECATED: Use subscribe() directly."""
         self.subscribe(FEEDS["door_lock"], callback)
 
     def send_command(self, cmd: DeviceCommand):
@@ -346,8 +346,8 @@ class Gateway:
             logger.info(f"[PY→ADA→DEVICE] {cmd.device_id} → {cmd.action}")
         else:
             logger.warning(
-                f"Không tìm thấy device '{cmd.device_id}'. "
-                f"Hợp lệ: {list(FEEDS.keys())}"
+                f"Device not found:  '{cmd.device_id}'. "
+                f"Valid: {list(FEEDS.keys())}"
             )
 
     def publish(self, feed_key: str, value: Any) -> FeedUpdate:
@@ -364,10 +364,10 @@ class Gateway:
             resp.raise_for_status()
             logger.debug(f"[PY→NODE] POST {endpoint} {resp.status_code}")
         except requests.exceptions.ConnectionError:
-            logger.warning(f"Node.js chưa chạy — POST {endpoint} thất bại")
+            logger.warning(f"Node.js not running — POST {endpoint} failed")
         except requests.exceptions.Timeout:
             logger.warning(f"POST {endpoint} timeout (>2s)")
         except requests.exceptions.HTTPError as e:
-            logger.error(f"Node.js lỗi HTTP tại {endpoint}: {e}")
+            logger.error(f"Node.js HTTP error at {endpoint}: {e}")
         except requests.exceptions.RequestException as e:
-            logger.error(f"Lỗi POST {endpoint}: {e}")
+            logger.error(f"POST error {endpoint}: {e}")

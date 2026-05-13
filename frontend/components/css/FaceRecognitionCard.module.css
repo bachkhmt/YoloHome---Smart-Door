@@ -1,0 +1,565 @@
+/* ── FaceRecognitionCard — Pipeline mockup ── */
+
+.card {
+  background: var(--glass);
+  border: 1px solid var(--gborder);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+  grid-column: span 2;
+}
+/* Span 2 columns in 3-col grid, full width on mobile */
+@media (max-width: 900px) {
+  .card { grid-column: span 2; }
+}
+@media (max-width: 580px) {
+  .card { grid-column: span 1; }
+}
+
+/* ── Header ──────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--theme);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.titleIcon { font-size: 1.1rem; }
+.apiMode {
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--theme2);
+  font-family: var(--font-mono);
+}
+
+/* ── Body layout — camera left, stages right ── */
+
+.body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .body { grid-template-columns: 1fr; }
+}
+
+/* ── Camera viewport ────────────────────────── */
+
+.cameraSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #0a0a1a;
+  border-radius: 10px;
+  border: 1px solid var(--gborder);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mock camera feed — dark gradient with grid overlay */
+.mockFeed {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 40%, #1a1040 0%, #0a0a1a 100%),
+    repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(255,255,255,0.02) 32px),
+    repeating-linear-gradient(90deg, transparent, transparent 31px, rgba(255,255,255,0.02) 32px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Real webcam feed */
+.videoFeed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  transform: scaleX(-1);  /* mirror for selfie view */
+}
+
+/* Start camera overlay button */
+.startCamBtn {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--theme);
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--theme);
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 5;
+}
+.startCamBtn:hover {
+  background: var(--theme);
+  color: #fff;
+}
+
+/* Silhouette placeholder */
+.silhouette {
+  width: 100px;
+  height: 140px;
+  opacity: 0.25;
+  position: relative;
+}
+.silhouetteHead {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: var(--theme);
+  margin: 0 auto;
+  opacity: 0.5;
+}
+.silhouetteBody {
+  width: 100px; height: 60px;
+  background: var(--theme);
+  border-radius: 30px 30px 0 0;
+  margin-top: 4px;
+  opacity: 0.3;
+}
+
+/* Face bounding box overlay */
+.faceBox {
+  position: absolute;
+  border: 2px solid var(--success);
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+  animation: boxPulse 0.8s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.faceBoxScanning {
+  border-color: var(--warn);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+}
+.faceBoxDenied {
+  border-color: var(--danger);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+}
+@keyframes boxPulse {
+  from { box-shadow: 0 0 8px rgba(16, 185, 129, 0.2); }
+  to   { box-shadow: 0 0 18px rgba(16, 185, 129, 0.5); }
+}
+
+/* Scanning line animation */
+.scanLine {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--success), transparent);
+  animation: scandown 2s linear infinite;
+  opacity: 0.6;
+}
+@keyframes scandown {
+  from { top: 0; }
+  to   { top: 100%; }
+}
+
+/* Corner decorations */
+.corners { pointer-events: none; }
+.c {
+  position: absolute; width: 14px; height: 14px;
+  border-color: var(--theme); opacity: 0.5;
+}
+.tl { top: 6px; left: 6px;   border-top: 2px solid; border-left: 2px solid; }
+.tr { top: 6px; right: 6px;  border-top: 2px solid; border-right: 2px solid; }
+.bl { bottom: 6px; left: 6px;  border-bottom: 2px solid; border-left: 2px solid; }
+.br { bottom: 6px; right: 6px; border-bottom: 2px solid; border-right: 2px solid; }
+
+/* No face message */
+.noFace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text2);
+  font-size: 0.7rem;
+  position: absolute;
+  bottom: 12px;
+}
+
+.camLabel {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  color: var(--success);
+  background: rgba(0,0,0,0.5);
+  padding: 2px 7px;
+  border-radius: 4px;
+  animation: blink 1.5s infinite;
+}
+.camSource {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-size: 0.55rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  background: rgba(0,0,0,0.4);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+/* ── Controls under viewport ─────────────────── */
+
+.controls {
+  display: flex;
+  gap: 8px;
+}
+.btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--gborder);
+  background: var(--glass);
+  color: var(--text);
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btnPrimary {
+  background: var(--theme);
+  border-color: var(--theme);
+  color: #fff;
+}
+.btnPrimary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--theme) 80%, white);
+}
+.btnDanger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btnDanger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Right panel — stages + results ─────────── */
+
+.rightPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Pipeline stages ────────────────────────── */
+
+.stagesLabel {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.stages {
+  display: flex;
+  gap: 6px;
+}
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--gborder);
+  transition: all 0.3s;
+  min-width: 0;
+}
+.stageRunning {
+  border-color: var(--warn);
+  background: rgba(245, 158, 11, 0.08);
+}
+.stageDone {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.08);
+}
+.stageFailed {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+.stageSkipped {
+  opacity: 0.3;
+}
+
+.stageIcon {
+  font-size: 1rem;
+  transition: transform 0.3s;
+}
+.stageRunning .stageIcon {
+  animation: spin 0.8s linear infinite;
+}
+.stageName {
+  font-size: 0.55rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  white-space: nowrap;
+}
+.stageTime {
+  font-size: 0.5rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  opacity: 0.7;
+}
+
+/* ── Timing bar ─────────────────────────────── */
+
+.timingBar {
+  height: 3px;
+  background: var(--gborder);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  gap: 2px;
+}
+.timingSegment {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.4s;
+}
+.tSegDetect   { background: #6366f1; }
+.tSegLiveness { background: #8b5cf6; }
+.tSegAlign    { background: #ec4899; }
+.tSegEmbed    { background: #f59e0b; }
+.tSegSearch   { background: #10b981; }
+
+.totalTiming {
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  text-align: right;
+}
+
+/* ── Result card ────────────────────────────── */
+
+.resultCard {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--gborder);
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
+}
+.resultHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.resultIcon {
+  font-size: 1.2rem;
+}
+.resultTitle {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.resultMatched { color: var(--success); }
+.resultDenied  { color: var(--danger); }
+.resultError   { color: var(--warn); }
+
+.resultMeta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+}
+.metaValue {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Confidence bar */
+.confBar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--gborder);
+  overflow: hidden;
+}
+.confFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.confHigh   { background: var(--success); }
+.confMedium { background: var(--warn); }
+.confLow    { background: var(--danger); }
+
+/* Error message */
+.errorMsg {
+  font-size: 0.65rem;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+/* ── Enrollment panel ───────────────────────── */
+
+.enrollPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gborder);
+  background: rgba(255,255,255,0.02);
+}
+.enrollInput {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--gborder);
+  background: rgba(0,0,0,0.3);
+  color: var(--text);
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  outline: none;
+  transition: border 0.2s;
+}
+.enrollInput:focus {
+  border-color: var(--theme);
+}
+.enrollProgress {
+  height: 4px;
+  background: var(--gborder);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.enrollProgressFill {
+  height: 100%;
+  background: var(--theme);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* ── Identities list ────────────────────────── */
+
+.identitiesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.identitiesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.identitiesTitle {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  letter-spacing: 1px;
+}
+.thresholdBadge {
+  font-size: 0.55rem;
+  font-family: var(--font-mono);
+  color: var(--theme2);
+  background: rgba(139, 92, 246, 0.12);
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+.identityList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.identityRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  font-size: 0.7rem;
+}
+.identityName {
+  font-weight: 600;
+  color: var(--text);
+}
+.identityMeta {
+  font-size: 0.6rem;
+  color: var(--text2);
+  font-family: var(--font-mono);
+}
+.identityDelete {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.identityDelete:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Spoof warning ──────────────────────────── */
+
+.spoofWarning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+  font-size: 0.7rem;
+  font-weight: 600;
+  animation: alertflash 1s infinite;
+}

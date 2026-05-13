@@ -4,7 +4,7 @@ export default function FanCard({ fanSpeed, setFanSpeed }) {
   const spinDuration = fanSpeed === 0 ? 0 : (105 - fanSpeed) / 20
   return (
     <div className={styles.card}>
-      <div className={styles.label}>⚙️ Tốc Độ Quạt</div>
+      <div className={styles.label}>⚙️ Fan Speed</div>
       <div className={styles.row}>
         <span
           className={styles.fanIcon}

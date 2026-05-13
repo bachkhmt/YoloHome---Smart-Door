@@ -1,277 +1,202 @@
 # 🏠 YOLO Home — Smart Door System
 
-Hệ thống khóa cửa thông minh sử dụng **YOLO:Bit (ESP32)** kết hợp với dashboard **React + Vite** và database **MySQL**.
+AI-powered smart door with **face recognition**, **IoT sensor monitoring**, and **remote hardware control** via ESP32 / YOLO:Bit.
+
+[![Stack](https://img.shields.io/badge/Frontend-React_+_Vite-61DAFB?style=flat-square)](https://vitejs.dev)
+[![Stack](https://img.shields.io/badge/Backend-Node.js_+_Express-339933?style=flat-square)](https://expressjs.com)
+[![Stack](https://img.shields.io/badge/AI-Face_Recognizer_Pipeline-3776AB?style=flat-square)](https://github.com/khenm/face-recognizer)
+[![Stack](https://img.shields.io/badge/Hardware-ESP32_+_YOLO:Bit-E34F26?style=flat-square)](https://www.espressif.com)
 
 ---
 
-## 📋 Mục Lục
-
-1. [Tổng Quan Hệ Thống](#1-tổng-quan-hệ-thống)
-2. [Yêu Cầu Cài Đặt](#2-yêu-cầu-cài-đặt)
-3. [Cấu Trúc Dự Án](#3-cấu-trúc-dự-án)
-4. [Thiết Lập Database MySQL](#4-thiết-lập-database-mysql)
-5. [Cài Đặt & Chạy Backend](#5-cài-đặt--chạy-backend)
-6. [Cài Đặt & Chạy Frontend](#6-cài-đặt--chạy-frontend)
-7. [Kết Nối YOLO:Bit (ESP32)](#7-kết-nối-yolobit-esp32)
-8. [Sơ Đồ Kết Nối Phần Cứng](#8-sơ-đồ-kết-nối-phần-cứng)
-9. [API Endpoints](#9-api-endpoints)
-10. [Tính Năng & FR Mapping](#10-tính-năng--fr-mapping)
-11. [Xử Lý Lỗi Thường Gặp](#11-xử-lý-lỗi-thường-gặp)
-
----
-
-## 1. Tổng Quan Hệ Thống
+## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                     KIẾN TRÚC HỆ THỐNG                         │
-│                                                                │
-│   [React Dashboard]  ←──────────────────────────────────────┐  │
-│        :5173         │  HTTP / Proxy                        │  │
-│           │          ▼                                      │  │
-│           └───► [Node.js Backend] ◄──► [MySQL Database]     │  │
-│                      :3001         SQL       yolo_home      │  │
-│                        │                                    │  │
-│                        │  HTTP POST/GET                     │  │
-│                        ▼                                    │  │
-│                  [YOLO:Bit ESP32]  ─────────────────────────┘  │
-│                    (WiFi)                                      │
-│                        │                                       │
-│              ┌─────────┼──────────┐                            │
-│              ▼         ▼          ▼                            │
-│           [Servo]    [LED]    [Buzzer]                         │
-│           GPIO12    GPIO5    GPIO15                            │
-└────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     React Dashboard (:5173)                  │
+│               Face recognition · Door control · Sensors      │
+└────────────┬─────────────────────────────────┬──────────────┘
+             │ HTTP (Vite proxy)               │ HTTP
+             ▼                                 ▼
+┌────────────────────────┐    ┌────────────────────────────────┐
+│  Node.js + Express     │    │  Face Recognizer (:8000)       │
+│  + MySQL (:3001)       │    │  YOLO → Liveness → DFA →       │
+│  Users · Logs · Door   │    │  ArcFace → FAISS + SQLite      │
+└────────┬───────────────┘    └────────────────────────────────┘
+         │ MQTT (Adafruit IO)
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              ESP32 / YOLO:Bit Hardware                      │
+│  ESP32-CAM · Servo (GPIO12) · LED (GPIO5) · DHT22 (GPIO4)  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Luồng hoạt động:**
-1. Dashboard React gửi lệnh mở/khóa → Backend Node.js lưu vào MySQL
-2. YOLO:Bit polling Backend mỗi 2 giây → nhận trạng thái → điều khiển Servo + LED
-3. Mọi sự kiện xác thực được ghi vào bảng `access_logs` trong MySQL
-4. Dashboard hiển thị realtime từ database
+## Quick Start
 
----
+### Prerequisites
 
-## 2. Yêu Cầu Cài Đặt
-
-### Máy Tính (PC/Laptop)
-
-| Phần mềm | Phiên bản | Link tải |
-|---|---|---|
-| Node.js | >= 18.0 | https://nodejs.org |
-| MySQL Server | >= 8.0 | https://dev.mysql.com/downloads/ |
-| MySQL Workbench | Bất kỳ | https://dev.mysql.com/downloads/workbench/ |
-| Git | Bất kỳ | https://git-scm.com |
-
-### YOLO:Bit / ESP32
-
-| Phần mềm | Link tải |
+| Tool | Version |
 |---|---|
-| Thonny IDE | https://thonny.org |
-| MicroPython firmware cho ESP32 | https://micropython.org/download/ESP32_GENERIC/ |
+| Node.js | ≥ 18 |
+| Python | ≥ 3.10 + [uv](https://docs.astral.sh/uv/) |
+| MySQL | ≥ 8.0 |
 
-### Linh Kiện Phần Cứng
-
-| Linh kiện | Số lượng | GPIO | Ghi chú |
-|---|---|---|---|
-| YOLO:Bit (ESP32) | 1 | — | Board chính |
-| Servo MG996R | 1 | GPIO 12 | Điều khiển khóa cửa |
-| LED WS2812B (NeoPixel) | 1 | GPIO 5 | Đèn trạng thái |
-| Buzzer | 1 | GPIO 15 | Còi cảnh báo (tùy chọn) |
-| Dây jumper | Nhiều | — | Kết nối các linh kiện |
-| Nguồn 5V/2A | 1 | — | Cấp nguồn cho Servo |
-
----
-
-## 3. Cấu Trúc Dự Án
-
-```
-yolo-home/
-│
-├── 📄 index.html              # Entry HTML
-├── 📄 vite.config.js          # Cấu hình Vite + proxy API
-├── 📄 package.json            # Dependencies frontend
-├── 📄 .env                    # Biến môi trường (tự tạo, không commit)
-│
-├── 📁 src/                    # Mã nguồn React
-│   ├── main.jsx               # Entry point React
-│   ├── App.jsx                # Component gốc + layout grid
-│   ├── App.module.css         # CSS dashboard grid
-│   ├── index.css              # CSS global + biến màu
-│   │
-│   ├── 📁 hooks/
-│   │   └── useAppState.js     # Toàn bộ state management
-│   │
-│   ├── 📁 lib/
-│   │   └── api.js             # Axios — gọi API backend
-│   │
-│   └── 📁 components/        # 13 components UI
-│       ├── Topbar.*           # Thanh điều hướng + đồng hồ + DB status
-│       ├── AlertBar.*         # Cảnh báo bảo mật nhiều lần thất bại
-│       ├── HeroCard.*         # Trạng thái cửa + LED + nút điều khiển
-│       ├── CameraCard.*       # Khung camera giả lập + thanh tiến trình
-│       ├── AuthModes.*        # Bật/tắt Face ID / Voice ID
-│       ├── SensorCard.*       # Hiển thị cảm biến (dùng lại cho 3 loại)
-│       ├── FanCard.*          # Điều khiển tốc độ quạt PWM
-│       ├── MoodCard.*         # Chọn màu RGB LED (5 chế độ)
-│       ├── ActivityChart.*    # Biểu đồ Chart.js 7 ngày
-│       ├── UserManager.*      # CRUD người dùng
-│       ├── AccessLog.*        # Bảng lịch sử truy cập
-│       ├── SystemStats.*      # CPU / RAM / Network / Latency
-│       ├── PinoutCard.*       # Sơ đồ GPIO YOLO:Bit
-│       └── ToastContainer.*   # Thông báo toast góc dưới phải
-│
-└── 📁 server/                 # Backend Node.js
-    ├── index.js               # Express API server
-    ├── schema.sql             # SQL tạo database + bảng + dữ liệu mẫu
-    └── package.json           # Dependencies backend
-```
-
----
-
-## 4. Thiết Lập Database MySQL
-
-### Bước 4.1 — Mở MySQL Workbench
-
-Mở MySQL Workbench → click vào connection **"Local instance MySQL"** → đăng nhập.
-
-### Bước 4.2 — Chạy Schema SQL
-
-1. Vào menu **File → Open SQL Script**
-2. Chọn file `server/schema.sql` trong thư mục project
-3. Nhấn **⚡ Execute All** (hoặc `Ctrl + Shift + Enter`)
-
-
-### Bước 4.3 — Kiểm Tra
-
-Sau khi chạy xong, trong panel **Schemas** bên trái sẽ thấy:
-
-```
-yolo_home
-  ├── Tables
-  │    ├── access_logs
-  │    ├── door_state
-  │    ├── remote_controls
-  │    ├── security_alerts
-  │    ├── sensor_readings
-  │    ├── system_backups
-  │    └── users
-  └── Views
-       ├── v_access_log_full
-       ├── v_dashboard_summary
-       ├── v_unresolved_alerts
-       └── v_weekly_auth_stats
-```
-
-Chạy lệnh này để kiểm tra dữ liệu mẫu đã vào chưa:
+### 1. Database
 
 ```sql
-USE yolo_home;
-SELECT * FROM users;
+CREATE DATABASE yolo_home;
 ```
 
-Nếu thấy 3 dòng (Nguyễn Văn An, Trần Thị Bích, Lê Minh Đức) là thành công.
+Run `server/schema.sql` in MySQL to create tables and seed data.
 
----
+### 2. Environment
 
-## 5. Cài Đặt & Chạy Backend
-
-### Bước 5.1 — Tạo file `.env`
-
-Trong thư mục **gốc** của project (cùng cấp với `package.json`), tạo file tên `.env`:
+Create `.env` in the project root:
 
 ```env
 DB_HOST=localhost
-DB_PORT=3306
 DB_USER=root
-DB_PASS=Pass_MySQL
+DB_PASS=your_password
 DB_NAME=yolo_home
 PORT=3001
+ADAFRUIT_USERNAME=your_username   # optional, for MQTT
+ADAFRUIT_KEY=your_aio_key         # optional, for MQTT
 ```
 
-> **Lưu ý:** Nếu MySQL của bạn có password, điền vào `DB_PASS=matkhau`.
-
-### Bước 5.2 — Cài Dependencies & Chạy
-
-Mở terminal, `cd` vào thư mục `server/`:
+### 3. Backend
 
 ```bash
-cd yolo-home/server
+cd server
 npm install
-npm run dev             # chạy backend
+node index.js       # → http://localhost:3001
 ```
 
-**Output thành công:**
-
-```
-Restarting 'index.js'
-🏠 YOLO Home API → http://localhost:3001
-✅ MySQL connected
-```
-
-**Nếu thấy lỗi MySQL:**
-
-```
-❌ MySQL error: Access denied for user 'root'@'localhost'
-```
-
-→ Kiểm tra lại `DB_PASS` trong file `.env` và trong `server/index.js`
-
-### Bước 5.3 — Kiểm Tra API
-
-Mở trình duyệt vào:
-
-```
-http://localhost:3001/api/health
-```
-
-Kết quả đúng:
-
-```json
-{ "status": "ok", "db": "connected" }
-```
-
----
-
-## 6. Cài Đặt & Chạy Frontend
-
-> **Quan trọng:** Giữ terminal backend đang chạy, mở terminal **mới**.
-
-### Bước 6.1 — Cài Dependencies
+### 4. Frontend
 
 ```bash
-cd yolo-home
 npm install
+npm run dev         # → http://localhost:5173
 ```
 
-### Bước 6.2 — Chạy Dev Server
+### 5. Face Recognizer (AI Pipeline)
 
 ```bash
-npm run dev         # chạy frontend
+git clone https://github.com/khenm/face-recognizer.git
+cd face-recognizer
+uv sync
+uv run python scripts/download_models.py
+uv run python scripts/serve.py    # → http://localhost:8000
 ```
 
-**Output:**
+The dashboard auto-connects to the face recognizer via the Vite proxy (`/face-recognizer` → `localhost:8000`).
+
+## Features
+
+### 🔐 Face Recognition Door Lock
+
+- **Enroll**: Capture face from webcam → stored in vector database (FAISS + SQLite)
+- **Recognize**: 5-stage pipeline — YOLO detect → Liveness check → DFA align → ArcFace embed → FAISS search
+- **Auto-unlock**: Matching face triggers door unlock via MQTT → servo
+- **Spoof detection**: MiniFASNet liveness check blocks photos/replays
+- **Access log**: Every authentication recorded with timestamp, method, confidence
+
+### 🌡️ Sensor Monitoring
+
+- Temperature, humidity, light level from DHT22
+- Real-time charts (7-day activity history)
+- Configurable alert thresholds
+
+### 🎛️ Hardware Control
+
+- **Servo door lock** (GPIO12)
+- **RGB LED mood lighting** (GPIO5, NeoPixel WS2812B)
+- **Fan speed control** via PWM
+- All commands routed through Adafruit IO MQTT
+
+## API Endpoints
+
+### Node.js Backend (`:3001`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/health` | Health check + DB status |
+| GET | `/api/summary` | Dashboard summary |
+| GET/POST/PATCH/DELETE | `/api/users/*` | User CRUD |
+| GET/POST | `/api/logs` | Access log read/write |
+| GET/POST | `/api/door/state` | Door lock state |
+| POST | `/api/door/unlock` | Unlock door (publishes to Adafruit) |
+| POST | `/api/door/lock` | Lock door (publishes to Adafruit) |
+| GET/POST | `/api/sensors/*` | Sensor readings |
+| GET/POST/PATCH | `/api/remote/*` | Remote device commands |
+| GET/POST/PATCH | `/api/alerts/*` | Security alerts |
+| GET/POST/PATCH | `/api/backups/*` | System backups |
+| GET | `/api/chart/weekly` | Weekly auth stats |
+
+### Face Recognizer (`:8000`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Liveness probe |
+| GET | `/people` | List enrolled identities + threshold |
+| POST | `/recognize` | Recognize face in uploaded image |
+| POST | `/enroll` | Enroll new person from image |
+| POST | `/calibrate` | Recompute match threshold |
+| DELETE | `/people/{name}` | Remove enrolled person |
+
+## Hardware Wiring
+
+| Component | GPIO | Notes |
+|---|---|---|
+| Servo MG996R | 12 | Door lock actuator |
+| LED WS2812B | 5 | NeoPixel status indicator |
+| DHT22 | 4 | Temperature + humidity |
+| ESP32-CAM | I2C | Camera module |
+| Buzzer | 15 | Optional alert buzzer |
+
+## Project Structure
 
 ```
-  VITE v5.x.x  ready in 300ms
-
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.1.xxx:5173/
+YoloHome---Smart-Door/
+├── frontend/               # React + Vite dashboard
+│   ├── components/         # UI cards (Hero, Camera, Sensors, etc.)
+│   ├── hooks/              # State management + face recognition
+│   └── lib/                # Axios API client
+├── server/                 # Node.js + Express + MySQL
+│   ├── index.js            # API server
+│   └── schema.sql          # Database schema + seed data
+├── IoT/                    # Python IoT gateway
+│   ├── yolohome/           # Core package
+│   │   ├── devices/        # Hardware abstraction (ESP32-CAM, mic, sensors)
+│   │   ├── parsers/        # Event parsers (camera, sound, micro:bit)
+│   │   ├── simulators/     # Simulated devices for development
+│   │   └── gateway/        # MQTT + Adafruit IO bridge
+│   ├── gateway_bridge.py   # Gateway → Node.js DB bridge
+│   └── scripts/run.py      # Gateway entrypoint
+├── yolobit/                # MicroPython firmware for YOLO:Bit
+│   └── main.py
+├── vite.config.js          # Vite config + API proxy
+└── package.json            # Frontend dependencies
 ```
 
-### Bước 6.3 — Mở Trình Duyệt
+## Development Without Hardware
 
-Vào `http://localhost:5173`
+The system supports full software-only development:
 
-- Badge **"🗄️ MySQL Connected"** trên topbar = kết nối DB thành công
-- Badge **"🗄️ Local Mode"** = backend chưa chạy (app vẫn hoạt động với mock data)
+- **Face Recognizer**: Use laptop webcam (click "Start Camera" in dashboard)
+- **Sensors**: Simulated data from `IoT/yolohome/simulators/` or dashboard defaults
+- **Door state**: Toggle manually via dashboard buttons
+- Set `use_simulator: true` in `IoT/configs/settings.yaml` for the Python gateway
 
-### Bước 6.4 — Build Production
+## Troubleshooting
 
-```bash
-npm run build
-npm run preview
-```
+| Issue | Fix |
+|---|---|
+| Camera not showing | Click "▶ Start Camera" — browser requires user gesture for `getUserMedia` |
+| No MySQL connection | Verify `.env` has correct `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME` |
+| Face recognizer offline | Ensure `face-recognizer` server is running on port 8000 |
+| Liveness false positives | Liveness is skipped by default (`skip_liveness: true`) |
+| MQTT disconnected | Set `ADAFRUIT_USERNAME` and `ADAFRUIT_KEY` in `.env` |
 
----
+## License
 
+MIT

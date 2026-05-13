@@ -88,19 +88,19 @@ def register_face():
     """
     user_id = request.args.get("user_id")
     if not user_id:
-        return {"error": "Thiếu tham số user_id"}, 400
+        return {"error": "Missing user_id parameter"}, 400
 
     with _frame_lock:
         frame = _latest_frame.copy() if _latest_frame is not None else None
 
     if frame is None:
-        return {"error": "Camera chưa sẵn sàng"}, 503
+        return {"error": "Camera not ready"}, 503
 
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     encodings = face_recognition.face_encodings(rgb_frame)
 
     if not encodings:
-        return {"error": "Không tìm thấy khuôn mặt trong khung hình"}, 400
+        return {"error": "No face found in frame"}, 400
 
     face_data = encodings[0].tolist()
 

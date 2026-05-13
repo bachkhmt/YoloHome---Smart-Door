@@ -21,23 +21,22 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
   const [authInProgress, setAuthInProgress] = useState(false)
 
   const statusMap = {
-    locked:   { text: '● Đang Khóa',    cls: styles.pillLocked   },
-    unlocked: { text: '● Đã Mở',        cls: styles.pillUnlocked },
-    auth:     { text: '● Đang Xác Thực',cls: styles.pillAuth     },
-    granted:  { text: '● Truy Cập OK',  cls: styles.pillGranted  },
-    denied:   { text: '● Từ Chối',      cls: styles.pillDenied   },
+    locked:   { text: '● Locked',       cls: styles.pillLocked   },
+    unlocked: { text: '● Unlocked',     cls: styles.pillUnlocked },
+    auth:     { text: '● Scanning',     cls: styles.pillAuth     },
+    granted:  { text: '● Access OK',    cls: styles.pillGranted  },
+    denied:   { text: '● Denied',       cls: styles.pillDenied   },
   }
-  
+
   const statusKey = ledState === 'auth' ? 'auth'
     : ledState === 'granted' ? 'granted'
     : ledState === 'denied'  ? 'denied'
     : locked ? 'locked' : 'unlocked'
   const status = statusMap[statusKey]
 
-
   const handleUnlock = async () => {
     try {
-      console.log('[DOOR] 🔓 Gửi lệnh mở khóa → Node.js → Adafruit → Python...');
+      console.log('[DOOR] Sending unlock command → Node.js → Adafruit → Python...');
       const res = await fetch('/api/door/unlock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,17 +46,17 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      console.log('[DOOR] ✅ Mở khóa thành công:', data.message);
+      console.log('[DOOR] Unlock success:', data.message);
       if (manualUnlock) manualUnlock();
     } catch (error) {
-      console.error('[DOOR] ❌ Lỗi mở khóa:', error.message);
-      alert('Không thể mở khóa: ' + error.message);
+      console.error('[DOOR] Unlock error:', error.message);
+      alert('Cannot unlock: ' + error.message);
     }
   };
 
   const handleLock = async () => {
     try {
-      console.log('[DOOR] 🔒 Gửi lệnh khóa → Node.js → Adafruit → Python...');
+      console.log('[DOOR] Sending lock command → Node.js → Adafruit → Python...');
       const res = await fetch('/api/door/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,33 +66,24 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      console.log('[DOOR] ✅ Khóa cửa thành công:', data.message);
+      console.log('[DOOR] Lock success:', data.message);
       if (manualLock) manualLock();
     } catch (error) {
-      console.error('[DOOR] ❌ Lỗi khóa cửa:', error.message);
-      alert('Không thể khóa cửa: ' + error.message);
+      console.error('[DOOR] Lock error:', error.message);
+      alert('Cannot lock: ' + error.message);
     }
   };
 
-  /**
-   * Kích hoạt xác thực khuôn mặt qua API.
-   * 
-   * Flow:
-   *   1. POST /api/auth/trigger
-   *   2. Node.js publish lên Adafruit yolohome.auth-trigger
-   *   3. Python nhận → mở camera → xác thực 1 lần → đóng camera
-   *   4. Kết quả trả về qua socket hoặc polling
-   */
   const handleAuth = async () => {
     if (authInProgress) {
-      console.warn('[AUTH] Đang xử lý request xác thực khác')
+      console.warn('[AUTH] Another auth request in progress')
       return
     }
 
     setAuthInProgress(true)
 
     try {
-      console.log('[AUTH] 🔍 Gửi lệnh xác thực...')
+      console.log('[AUTH] Sending auth trigger...')
 
       const res = await fetch('/api/auth/trigger', {
         method: 'POST',
@@ -105,18 +95,16 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
       }
 
       const data = await res.json()
-      console.log('[AUTH] ✅ Lệnh xác thực đã gửi:', data)
+      console.log('[AUTH] Trigger sent:', data)
 
-      // Gọi callback của parent (nếu có logic thêm)
       if (startAuth) {
         startAuth()
       }
 
     } catch (error) {
-      console.error('[AUTH] ❌ Lỗi khi gửi lệnh xác thực:', error)
-      alert('Không thể kích hoạt xác thực. Vui lòng thử lại.')
+      console.error('[AUTH] Trigger error:', error)
+      alert('Unable to trigger authentication. Please try again.')
     } finally {
-      // Reset trạng thái sau 3s (hoặc đợi response từ socket)
       setTimeout(() => setAuthInProgress(false), 3000)
     }
   }
@@ -142,26 +130,26 @@ export default function HeroCard({ locked, busy, ledState, startAuth, manualUnlo
         </div>
       </div>
       <div className={styles.right}>
-        <button 
-          className={`${styles.btn} ${styles.btnPrimary}`} 
-          onClick={handleAuth} 
+        <button
+          className={`${styles.btn} ${styles.btnPrimary}`}
+          onClick={handleAuth}
           disabled={busy || authInProgress}
         >
-          {authInProgress ? '⏳ Đang xác thực...' : busy ? '⏳ Đang xử lý...' : '🔍 Xác Thực'}
+          {authInProgress ? '⏳ Authenticating...' : busy ? '⏳ Processing...' : '🔍 Authenticate'}
         </button>
-        
-        <button 
-          className={`${styles.btn} ${styles.btnSuccess}`} 
+
+        <button
+          className={`${styles.btn} ${styles.btnSuccess}`}
           onClick={handleUnlock}
         >
-          🔓 Mở
+          🔓 Unlock
         </button>
-        
-        <button 
-          className={`${styles.btn} ${styles.btnDanger}`} 
+
+        <button
+          className={`${styles.btn} ${styles.btnDanger}`}
           onClick={handleLock}
         >
-          🔒 Khóa
+          🔒 Lock
         </button>
       </div>
     </div>
