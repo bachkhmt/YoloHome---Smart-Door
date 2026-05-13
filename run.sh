@@ -79,10 +79,18 @@ wait_for() {
 
 # ── Prerequisite checks ──────────────────────────────────────────
 check_prereqs() {
-  require docker
   require node
   require uv
   require curl
+
+  # Docker: binary + daemon must be running
+  require docker
+  if ! docker ps >/dev/null 2>&1; then
+    red "❌ Docker daemon is not running."
+    echo "   macOS:  open -a Docker"
+    echo "   Linux:  sudo systemctl start docker"
+    exit 1
+  fi
 
   # Install Node deps if missing
   if [ ! -d "$SCRIPT_DIR/server/node_modules" ]; then
@@ -93,20 +101,20 @@ check_prereqs() {
 
 # ── MySQL via Docker ─────────────────────────────────────────────
 ensure_mysql() {
-  # Create .env from template if missing
-  if [ ! -f "$SCRIPT_DIR/.env" ]; then
+  # Create .env from template if missing (in server/ where dotenv looks)
+  if [ ! -f "$SCRIPT_DIR/server/.env" ]; then
     if [ -f "$SCRIPT_DIR/.env.example" ]; then
-      cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
-      green "📝 Created .env from .env.example"
+      cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/server/.env"
+      green "📝 Created server/.env from .env.example"
     else
-      cat > "$SCRIPT_DIR/.env" <<EOF
+      cat > "$SCRIPT_DIR/server/.env" <<EOF
 DB_HOST=localhost
 DB_PORT=$MYSQL_PORT
 DB_USER=$MYSQL_USER
 DB_PASS=$MYSQL_PASS
 DB_NAME=$MYSQL_DB
 EOF
-      green "📝 Created .env with defaults"
+      green "📝 Created server/.env with defaults"
     fi
   fi
 
@@ -163,8 +171,10 @@ start_face_recognizer() {
   fi
 
   echo "🔷 Starting face‑recognizer (port $FACE_PORT)..."
+  # Kill any stale process on the port
+  lsof -ti ":$FACE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
   cd "$FACE_RECOGNIZER_DIR"
-  uv run python scripts/serve.py +server.port="$FACE_PORT" &
+  uv run python scripts/serve.py server.port="$FACE_PORT" &
   PIDS+=($!)
   wait_for "http://localhost:$FACE_PORT/health" "face‑recognizer"
 }
@@ -172,6 +182,8 @@ start_face_recognizer() {
 # ── YoloHome Node Server ─────────────────────────────────────────
 start_node_server() {
   echo "🔷 Starting YoloHome Node server (port $NODE_PORT)..."
+  # Kill any stale process on the port
+  lsof -ti ":$NODE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
   cd "$SCRIPT_DIR/server"
   node index.js &
   PIDS+=($!)
