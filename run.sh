@@ -170,6 +170,12 @@ start_face_recognizer() {
     (cd "$FACE_RECOGNIZER_DIR" && uv sync)
   fi
 
+  # Download model weights (~300 MB) if missing (gitignored, not in repo)
+  if [ ! -f "$FACE_RECOGNIZER_DIR/models/yolo26n_tuned.pt" ]; then
+    echo "📥 Downloading model weights (~300 MB)..."
+    (cd "$FACE_RECOGNIZER_DIR" && uv run python scripts/download_models.py)
+  fi
+
   echo "🔷 Starting face‑recognizer (port $FACE_PORT)..."
   # Kill any stale process on the port
   lsof -ti ":$FACE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
