@@ -30,7 +30,7 @@ const STAGE_TIMING = {
   search: { cold: 5, warm: 1 },
 }
 
-export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) {
+export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatch = null } = {}) {
   // ── Pipeline state ─────────────────────────────────────────────
   const [pipelineState, setPipelineState] = useState('idle')
   const [stages, setStages] = useState([
@@ -62,6 +62,11 @@ export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) 
   const busyRef = useRef(false)
   const mockInterval = useRef(null)
 
+  // ── ESP32-CAM mode ────────────────────────────────────────────
+  const useEsp32 = !!(useRealApi && esp32Url)
+  const esp32StreamUrl = esp32Url ? `${esp32Url}:81/stream` : null
+  const esp32CaptureUrl = '/esp32/capture'   // proxied through Vite
+
   // ═══════════════════════════════════════════════════════════════
   //  FETCH PEOPLE (real API) — load identities on mount
   // ═══════════════════════════════════════════════════════════════
@@ -86,6 +91,11 @@ export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) 
   const startCamera = useCallback(async () => {
     if (!useRealApi) return
     try {
+      if (useEsp32) {
+        // ESP32-CAM: no getUserMedia needed — MJPEG stream renders via <img>
+        setCameraActive(true)
+        return
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
       })
@@ -94,22 +104,24 @@ export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) 
     } catch (e) {
       console.warn('Camera access denied:', e.message)
     }
-  }, [useRealApi])
+  }, [useRealApi, useEsp32])
 
-  // Attach stream to video element AFTER React renders it
+  // Attach stream to video element AFTER React renders it (webcam only — not ESP32)
   useEffect(() => {
-    if (cameraActive && streamRef.current && videoRef.current) {
+    if (cameraActive && streamRef.current && videoRef.current && !useEsp32) {
       videoRef.current.srcObject = streamRef.current
       videoRef.current.play().catch(() => {})
     }
   }, [cameraActive])
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
+    if (!useEsp32) {
+      streamRef.current?.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
     if (videoRef.current) videoRef.current.srcObject = null
     setCameraActive(false)
-  }, [])
+  }, [useEsp32])
 
   // ── Stop camera on unmount ────────────────────────────────────
   useEffect(() => {
@@ -117,9 +129,23 @@ export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) 
   }, [stopCamera])
 
   // ═══════════════════════════════════════════════════════════════
-  //  FRAME CAPTURE helper — video → JPEG Blob
+  //  FRAME CAPTURE helper — video/webcam → JPEG Blob
+  //  ESP32 mode: fetches a single JPEG from the ESP32-CAM /capture endpoint
   // ═══════════════════════════════════════════════════════════════
   const captureFrame = useCallback(async () => {
+    // ESP32-CAM: fetch single JPEG from /capture endpoint (proxied via Vite)
+    if (useEsp32) {
+      try {
+        const res = await fetch(esp32CaptureUrl)
+        if (!res.ok) throw new Error(`ESP32 capture failed: ${res.status}`)
+        return await res.blob()
+      } catch (e) {
+        console.warn('ESP32 capture error:', e.message)
+        return null
+      }
+    }
+
+    // Webcam: draw <video> → canvas → JPEG Blob
     const video = videoRef.current
     if (!video || video.readyState < 2) return null
 
@@ -131,7 +157,7 @@ export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) 
     return new Promise((resolve) => {
       canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92)
     })
-  }, [])
+  }, [useEsp32, esp32CaptureUrl])
 
   // ═══════════════════════════════════════════════════════════════
   //  MOCK HELPERS
@@ -429,6 +455,7 @@ export function useFaceRecognition({ useRealApi = false, onMatch = null } = {}) 
     enrolling, enrollProgress, enrollName,
     identities, threshold,
     cameraActive, videoRef,
+    useEsp32, esp32StreamUrl,
     setEnrollName,
     recognize, enroll, deletePerson, calibrate, reset,
     startCamera, stopCamera, fetchPeople,
