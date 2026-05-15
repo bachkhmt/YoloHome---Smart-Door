@@ -16,6 +16,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/face-recognizer/, ''),
       },
+      // ESP32-CAM proxy (avoids CORS issues when fetching /capture)
+      '/esp32': {
+        target: 'http://192.168.1.130',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/esp32/, ''),
+      },
     },
   },
 })

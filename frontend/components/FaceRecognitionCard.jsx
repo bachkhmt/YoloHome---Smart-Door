@@ -13,6 +13,7 @@ export default function FaceRecognitionCard({
   enrolling, enrollProgress, enrollName,
   identities, threshold,
   cameraActive, videoRef,
+  useEsp32, esp32StreamUrl,
   setEnrollName,
   recognize, enroll, deletePerson, calibrate, reset,
   startCamera,
@@ -60,8 +61,15 @@ export default function FaceRecognitionCard({
         {/* LEFT: Camera viewport */}
         <div className={styles.cameraSection}>
           <div className={styles.viewport}>
-            {/* Real webcam feed */}
-            {isLive && (
+            {/* Real webcam feed (webcam) or ESP32 MJPEG stream */}
+            {isLive && useEsp32 ? (
+              <img
+                ref={videoRef}
+                src={esp32StreamUrl}
+                className={styles.videoFeed}
+                alt="ESP32-CAM Stream"
+              />
+            ) : isLive && (
               <video
                 ref={videoRef}
                 className={styles.videoFeed}
@@ -120,7 +128,7 @@ export default function FaceRecognitionCard({
               {isLive ? '📷 LIVE' : '📷 STREAMING'}
             </div>
             <div className={styles.camSource}>
-              {isLive ? 'Webcam' : 'ESP32-CAM'}
+              {isLive ? (useEsp32 ? 'ESP32-CAM' : 'Webcam') : 'ESP32-CAM'}
             </div>
 
             {/* Start camera button (needs user gesture) */}

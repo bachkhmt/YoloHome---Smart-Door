@@ -20,7 +20,11 @@ import styles from './App.module.css'
 
 export default function App() {
   const s = useAppState()
-  const fr = useFaceRecognition({ useRealApi: true, onMatch: s.handleFaceMatch })
+  const fr = useFaceRecognition({
+    useRealApi: true,
+    esp32Url: 'http://192.168.1.130',
+    onMatch: s.handleFaceMatch,
+  })
 
   if (s.loading) {
     return (
@@ -60,6 +64,8 @@ export default function App() {
           threshold={fr.threshold}
           cameraActive={fr.cameraActive}
           videoRef={fr.videoRef}
+          useEsp32={fr.useEsp32}
+          esp32StreamUrl={fr.esp32StreamUrl}
           setEnrollName={fr.setEnrollName}
           recognize={fr.recognize}
           enroll={fr.enroll}
