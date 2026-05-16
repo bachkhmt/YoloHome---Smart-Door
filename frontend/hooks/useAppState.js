@@ -13,7 +13,7 @@ import useAdafruitMqtt from '../hooks/useAdafruitMqtt'
 
 export function useAppState() {
   // Adafruit MQTT — real-time feed data
-  const { sensorData, latestFace, doorState: mqttDoorState, publishDoorState, publishActivity } = useAdafruitMqtt()
+  const { sensorData, latestFace, doorState: mqttDoorState, publishDoorState, publishActivity, distance } = useAdafruitMqtt()
 
   // Core state
   const [locked,       setLocked]       = useState(true)
@@ -471,6 +471,6 @@ export function useAppState() {
     resolveAlertById, toast, resolveAllAlerts,
     handleFaceMatch,
     // MQTT data
-    latestFace,
+    latestFace, distance,
   }
 }
