@@ -19,6 +19,7 @@ const ADAFRUIT_CONFIG = {
     humidity: "yolohome.humidity",
     face:     "yolohome.face-detected",
     door:     "yolohome.door-lock",
+    activity: "yolohome.activity-log",
   }
 };
 
@@ -136,5 +137,14 @@ export default function useAdafruitMqtt() {
     }
   };
 
-  return { sensorData, latestFace, doorState, connected, publishDoorState };
+  const publishActivity = (entry) => {
+    if (clientRef.current && connected) {
+      const topic = `${ADAFRUIT_CONFIG.username}/feeds/${ADAFRUIT_CONFIG.feeds.activity}`;
+      const payload = JSON.stringify(entry);
+      clientRef.current.publish(topic, payload);
+      console.log('📤 Published activity log:', payload);
+    }
+  };
+
+  return { sensorData, latestFace, doorState, connected, publishDoorState, publishActivity };
 }

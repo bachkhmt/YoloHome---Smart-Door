@@ -66,6 +66,9 @@ export default function App() {
           videoRef={fr.videoRef}
           useEsp32={fr.useEsp32}
           esp32StreamUrl={fr.esp32StreamUrl}
+          failCount={fr.failCount}
+          lockedOut={fr.lockedOut}
+          maxRetries={fr.MAX_RETRIES}
           setEnrollName={fr.setEnrollName}
           recognize={fr.recognize}
           enroll={fr.enroll}

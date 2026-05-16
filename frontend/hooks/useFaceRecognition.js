@@ -60,12 +60,27 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const busyRef = useRef(false)
+  const blockUnlockRef = useRef(false)  // blocks onMatch during enrollment
   const mockInterval = useRef(null)
+
+  // ── Proximity auto-trigger ─────────────────────────────────────
+  const PROXIMITY_THRESHOLD = 50       // cm — trigger when person is closer than this
+  const DISTANCE_POLL_MS = 500         // poll ESP32 distance every 500ms
+  const RETRY_DELAY_MS = 30000         // 30s between retries
+  const MAX_RETRIES = 10               // max failures before lockout
+  const distanceTimerRef = useRef(null)
+  const retryTimerRef = useRef(null)
+  const failCountRef = useRef(0)
+  const sensorActiveRef = useRef(false)
+  const lockedOutRef = useRef(false)
+  const [failCount, setFailCount] = useState(0)
+  const [lockedOut, setLockedOut] = useState(false)
 
   // ── ESP32-CAM mode ────────────────────────────────────────────
   const useEsp32 = !!(useRealApi && esp32Url)
   const esp32StreamUrl = esp32Url ? `${esp32Url}:81/stream` : null
   const esp32CaptureUrl = '/esp32/capture'   // proxied through Vite
+  const cameraResolutionRef = useRef({ width: 640, height: 480 })
 
   // ═══════════════════════════════════════════════════════════════
   //  FETCH PEOPLE (real API) — load identities on mount
@@ -111,6 +126,18 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
     if (cameraActive && streamRef.current && videoRef.current && !useEsp32) {
       videoRef.current.srcObject = streamRef.current
       videoRef.current.play().catch(() => {})
+      // Detect webcam resolution once video is playing
+      const checkRes = () => {
+        if (videoRef.current?.videoWidth) {
+          cameraResolutionRef.current = {
+            width: videoRef.current.videoWidth,
+            height: videoRef.current.videoHeight,
+          }
+        } else {
+          requestAnimationFrame(checkRes)
+        }
+      }
+      requestAnimationFrame(checkRes)
     }
   }, [cameraActive])
 
@@ -129,6 +156,57 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
   }, [stopCamera])
 
   // ═══════════════════════════════════════════════════════════════
+  //  PROXIMITY POLLING — auto-trigger recognition from ESP32 distance sensor
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!useEsp32 || !cameraActive) return
+
+    const poll = async () => {
+      try {
+        const res = await fetch('/esp32/distance')
+        if (!res.ok) return
+        const text = await res.text()
+        const distance = parseFloat(text)
+        if (isNaN(distance)) return
+
+        const inRange = distance < PROXIMITY_THRESHOLD
+
+        // Person entered range → trigger immediately
+        if (inRange && !sensorActiveRef.current) {
+          sensorActiveRef.current = true
+          lockedOutRef.current = false
+          failCountRef.current = 0
+          setFailCount(0)
+          setLockedOut(false)
+          console.log(`[PROXIMITY] ${distance}cm — in range, triggering recognition`)
+          recognize()
+        }
+
+        // Person left range → reset everything
+        if (!inRange && sensorActiveRef.current) {
+          sensorActiveRef.current = false
+          lockedOutRef.current = false
+          failCountRef.current = 0
+          setFailCount(0)
+          setLockedOut(false)
+          clearTimeout(retryTimerRef.current)
+          console.log('[PROXIMITY] Out of range — reset')
+        }
+      } catch (_) {
+        // ESP32 unreachable — silent, button fallback still works
+      }
+    }
+
+    distanceTimerRef.current = setInterval(poll, DISTANCE_POLL_MS)
+    return () => clearInterval(distanceTimerRef.current)
+  }, [useEsp32, cameraActive, recognize])
+
+  // Cleanup retry timer on unmount
+  useEffect(() => {
+    return () => clearTimeout(retryTimerRef.current)
+  }, [])
+
+  // ═══════════════════════════════════════════════════════════════
   //  FRAME CAPTURE helper — video/webcam → JPEG Blob
   //  ESP32 mode: fetches a single JPEG from the ESP32-CAM /capture endpoint
   // ═══════════════════════════════════════════════════════════════
@@ -138,7 +216,20 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
       try {
         const res = await fetch(esp32CaptureUrl)
         if (!res.ok) throw new Error(`ESP32 capture failed: ${res.status}`)
-        return await res.blob()
+        const blob = await res.blob()
+
+        // Detect actual camera resolution from the JPEG
+        try {
+          const img = await createImageBitmap(blob)
+          if (img.width !== cameraResolutionRef.current.width ||
+              img.height !== cameraResolutionRef.current.height) {
+            cameraResolutionRef.current = { width: img.width, height: img.height }
+            console.log(`[ESP32] Resolution detected: ${img.width}x${img.height}`)
+          }
+          img.close()
+        } catch (_) { /* createImageBitmap not available — keep default */ }
+
+        return blob
       } catch (e) {
         console.warn('ESP32 capture error:', e.message)
         return null
@@ -245,9 +336,8 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
         // Normalize face_bbox [x1,y1,x2,y2] px → {x,y,w,h} 0-1 for overlay
         // Mirror x-axis to match the video's scaleX(-1) selfie flip
         let normBbox = null
-        if (data.face_bbox && videoRef.current) {
-          const vw = videoRef.current.videoWidth || 640
-          const vh = videoRef.current.videoHeight || 480
+        if (data.face_bbox) {
+          const { width: vw, height: vh } = cameraResolutionRef.current
           const [x1, y1, x2, y2] = data.face_bbox
           const x = 1 - (x2 / vw)   // mirror: right edge becomes left
           const w = (x2 - x1) / vw
@@ -266,9 +356,37 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
         setLastResult(result)
         setPipelineState(data.matched ? 'matched' : 'denied')
 
-        // Trigger door unlock on match
-        if (data.matched && onMatch) {
+        // Trigger door unlock on match (unless blocked — e.g., during enrollment)
+        if (data.matched && onMatch && !blockUnlockRef.current) {
           onMatch(result)
+        }
+
+        // Proximity retry logic
+        if (data.matched) {
+          // Success — reset failure counter
+          failCountRef.current = 0
+          lockedOutRef.current = false
+          setFailCount(0)
+          setLockedOut(false)
+          clearTimeout(retryTimerRef.current)
+        } else if (sensorActiveRef.current && !lockedOutRef.current) {
+          // Failure — increment and schedule retry
+          failCountRef.current += 1
+          setFailCount(failCountRef.current)
+          console.log(`[RETRY] Failure #${failCountRef.current}/${MAX_RETRIES}`)
+
+          if (failCountRef.current >= MAX_RETRIES) {
+            lockedOutRef.current = true
+            setLockedOut(true)
+            console.log('[RETRY] Locked out — step away from sensor to reset')
+          } else {
+            retryTimerRef.current = setTimeout(() => {
+              if (sensorActiveRef.current && !lockedOutRef.current && !busyRef.current) {
+                console.log('[RETRY] 30s — retrying...')
+                recognize()
+              }
+            }, RETRY_DELAY_MS)
+          }
         }
 
         busyRef.current = false
@@ -322,6 +440,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
   const enroll = useCallback(async (name) => {
     if (busyRef.current || !name?.trim()) return { ok: false, reason: 'No name' }
     busyRef.current = true
+    blockUnlockRef.current = true  // prevent recognize from unlocking during enrollment
     setEnrolling(true)
     setPipelineState('enrolling')
     resetStages()
@@ -332,7 +451,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
       if (useRealApi) {
         const blob = await captureFrame()
         if (!blob) {
-          setPipelineState('error'); setEnrolling(false); busyRef.current = false
+          setPipelineState('error'); setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
           return { ok: false, reason: 'No webcam frame captured' }
         }
         setEnrollProgress(30)
@@ -356,7 +475,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
           } else {
             setPipelineState('error')
           }
-          setEnrolling(false); busyRef.current = false
+          setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
           return { ok: false, reason: err.detail || `HTTP ${res.status}` }
         }
 
@@ -367,6 +486,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
         setPipelineState('matched')
         setEnrolling(false)
         busyRef.current = false
+        blockUnlockRef.current = false
         return { ok: true, name: name.trim(), row_id: data.row_id, liveness_score: data.liveness_score }
       }
 
@@ -377,7 +497,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
 
       if (!isReal) {
         setStages(prev => prev.map(s => s.key === 'liveness' ? { ...s, status: 'failed' } : s))
-        setPipelineState('denied'); setEnrolling(false); busyRef.current = false
+        setPipelineState('denied'); setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
         return { ok: false, reason: 'Spoof detected — cannot enroll from a photo/replay' }
       }
 
@@ -386,11 +506,11 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
       await simulateStage('search'); setEnrollProgress(100)
 
       setIdentities(prev => [...prev, { name: name.trim(), vectors: 1 }])
-      setPipelineState('matched'); setEnrolling(false); busyRef.current = false
+      setPipelineState('matched'); setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
       return { ok: true, name: name.trim(), row_id: identities.length + 1, liveness_score: 0.85 + Math.random() * 0.14 }
 
     } catch (e) {
-      setPipelineState('error'); setEnrolling(false); busyRef.current = false
+      setPipelineState('error'); setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
       return { ok: false, reason: e.message }
     }
   }, [useRealApi, captureFrame, fetchPeople, identities, resetStages, simulateStage])
@@ -441,6 +561,10 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
   // ═══════════════════════════════════════════════════════════════
   const reset = useCallback(() => {
     busyRef.current = false
+    blockUnlockRef.current = false
+    clearTimeout(retryTimerRef.current)
+    setFailCount(0)
+    setLockedOut(false)
     setPipelineState('idle')
     setLastResult(null)
     resetStages()
@@ -456,6 +580,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
     identities, threshold,
     cameraActive, videoRef,
     useEsp32, esp32StreamUrl,
+    failCount, lockedOut, MAX_RETRIES,
     setEnrollName,
     recognize, enroll, deletePerson, calibrate, reset,
     startCamera, stopCamera, fetchPeople,
