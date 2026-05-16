@@ -14,6 +14,7 @@ export default function FaceRecognitionCard({
   identities, threshold,
   cameraActive, videoRef,
   useEsp32, esp32StreamUrl,
+  failCount, lockedOut, maxRetries,
   setEnrollName,
   recognize, enroll, deletePerson, calibrate, reset,
   startCamera,
@@ -149,6 +150,18 @@ export default function FaceRecognitionCard({
               <div className={`${styles.c} ${styles.br}`} />
             </div>
           </div>
+
+          {/* Proximity retry / lockout indicator */}
+          {isLive && failCount > 0 && !lockedOut && (
+            <div style={{ fontSize: '0.65rem', color: 'var(--warn)', marginTop: 4, fontFamily: 'monospace' }}>
+              ⏳ Retry {failCount}/{maxRetries}
+            </div>
+          )}
+          {isLive && lockedOut && (
+            <div style={{ fontSize: '0.65rem', color: 'var(--danger)', marginTop: 4, fontFamily: 'monospace' }}>
+              🚫 Locked out — step away from sensor to reset
+            </div>
+          )}
 
           {/* ── Controls ──────────────────── */}
           <div className={styles.controls}>

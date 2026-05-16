@@ -13,7 +13,7 @@ import useAdafruitMqtt from '../hooks/useAdafruitMqtt'
 
 export function useAppState() {
   // Adafruit MQTT — real-time feed data
-  const { sensorData, latestFace, doorState: mqttDoorState, publishDoorState } = useAdafruitMqtt()
+  const { sensorData, latestFace, doorState: mqttDoorState, publishDoorState, publishActivity } = useAdafruitMqtt()
 
   // Core state
   const [locked,       setLocked]       = useState(true)
@@ -192,6 +192,14 @@ export function useAppState() {
     if (publishDoorState) {
       console.log('[MQTT] Publishing to Adafruit feed yolohome.door-lock:', newState)
       publishDoorState(newState)
+
+      // Also publish activity log entry
+      publishActivity({
+        action: newState,
+        source: source,
+        user: currentUser.current?.name || 'system',
+        timestamp: new Date().toISOString(),
+      })
     } else {
       console.warn('[MQTT] publishDoorState not ready')
     }
@@ -202,7 +210,7 @@ export function useAppState() {
     } catch (e) {
       console.warn('Cannot save door state to DB:', e.message)
     }
-  }, [publishDoorState])
+  }, [publishDoorState, publishActivity])
 
   const manualUnlock = useCallback(async () => {
     if (busy) return
@@ -424,27 +432,6 @@ export function useAppState() {
   }, [toast])
 
   // ══════════════════════════════════════════════════════════════
-  //  FR1 — AUTO TRIGGER
-  // ══════════════════════════════════════════════════════════════
-  const recognizeFaceFnRef = useRef(null)
-
-  const setAutoRecognizeFace = useCallback((fn) => {
-    recognizeFaceFnRef.current = fn
-  }, [])
-
-  useEffect(() => {
-    const iv = setInterval(() => {
-      if (!busy && Math.random() < 0.08) {
-        toast('inf', '📡 Person detected — auto-authenticating...')
-        setTimeout(() => {
-          if (!busy) startAuth(recognizeFaceFnRef.current)
-        }, 900)
-      }
-    }, 18000)
-    return () => clearInterval(iv)
-  }, [busy, startAuth, toast])
-
-  // ══════════════════════════════════════════════════════════════
   //  FACE MATCH HANDLER — triggered by face-recognizer pipeline
   // ══════════════════════════════════════════════════════════════
   const handleFaceMatch = useCallback(async (match) => {
@@ -482,7 +469,7 @@ export function useAppState() {
     addUserLocal, removeUser,
     toggleAuthMode, applyTheme,
     resolveAlertById, toast, resolveAllAlerts,
-    setAutoRecognizeFace, handleFaceMatch,
+    handleFaceMatch,
     // MQTT data
     latestFace,
   }
