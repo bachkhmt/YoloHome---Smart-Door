@@ -1,0 +1,3 @@
+[submodule "face-recognizer"]
+	path = face-recognizer
+	url = https://github.com/khenm/face-recognizer
