@@ -20,6 +20,7 @@ const ADAFRUIT_CONFIG = {
     face:     "yolohome.face-detected",
     door:     "yolohome.door-lock",
     activity: "yolohome.activity-log",
+    distance: "yolohome.distance",
   }
 };
 
@@ -27,6 +28,7 @@ export default function useAdafruitMqtt() {
   const [sensorData, setSensorData] = useState({ temp: 24.5, hum: 52, light: 310 });
   const [latestFace, setLatestFace] = useState(null);
   const [doorState, setDoorState]   = useState(null);  // null = not yet received from Adafruit
+  const [distance, setDistance]   = useState(null);  // cm from proximity sensor
   const [connected, setConnected]   = useState(false);
 
   const clientRef = useRef(null);
@@ -63,6 +65,7 @@ export default function useAdafruitMqtt() {
         client.subscribe(`${username}/feeds/${feeds.light}`);
         client.subscribe(`${username}/feeds/${feeds.door}`);
         client.subscribe(`${username}/feeds/${feeds.face}`);
+        client.subscribe(`${username}/feeds/${feeds.distance}`);
 
         console.log('📡 Subscribed to feeds:', Object.values(feeds));
       });
@@ -96,6 +99,10 @@ export default function useAdafruitMqtt() {
               setLatestFace({ label: payload, confidence: null });
             }
             console.log('👤 Face detected:', payload);
+          }
+          else if (topic.includes(feeds.distance)) {
+            setDistance(parseFloat(payload));
+            console.log('📏 Distance:', payload, 'cm');
           }
         } catch (err) {
           console.error('❌ MQTT parse error:', err);
@@ -146,5 +153,5 @@ export default function useAdafruitMqtt() {
     }
   };
 
-  return { sensorData, latestFace, doorState, connected, publishDoorState, publishActivity };
+  return { sensorData, latestFace, doorState, distance, connected, publishDoorState, publishActivity };
 }

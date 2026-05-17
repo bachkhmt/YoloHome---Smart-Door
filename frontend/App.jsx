@@ -23,6 +23,7 @@ export default function App() {
   const fr = useFaceRecognition({
     useRealApi: true,
     esp32Url: 'http://192.168.1.130',
+    distance: s.distance,
     onMatch: s.handleFaceMatch,
   })
 

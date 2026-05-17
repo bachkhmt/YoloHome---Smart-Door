@@ -30,7 +30,7 @@ const STAGE_TIMING = {
   search: { cold: 5, warm: 1 },
 }
 
-export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatch = null } = {}) {
+export function useFaceRecognition({ useRealApi = false, esp32Url = null, distance = null, onMatch = null } = {}) {
   // ── Pipeline state ─────────────────────────────────────────────
   const [pipelineState, setPipelineState] = useState('idle')
   const [stages, setStages] = useState([
@@ -65,10 +65,8 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
 
   // ── Proximity auto-trigger ─────────────────────────────────────
   const PROXIMITY_THRESHOLD = 50       // cm — trigger when person is closer than this
-  const DISTANCE_POLL_MS = 500         // poll ESP32 distance every 500ms
   const RETRY_DELAY_MS = 30000         // 30s between retries
   const MAX_RETRIES = 10               // max failures before lockout
-  const distanceTimerRef = useRef(null)
   const retryTimerRef = useRef(null)
   const failCountRef = useRef(0)
   const sensorActiveRef = useRef(false)
@@ -156,50 +154,35 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
   }, [stopCamera])
 
   // ═══════════════════════════════════════════════════════════════
-  //  PROXIMITY POLLING — auto-trigger recognition from ESP32 distance sensor
+  //  PROXIMITY — MQTT-driven auto-trigger from yolohome.distance feed
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (!useEsp32 || !cameraActive) return
+    if (!useRealApi || !cameraActive || distance === null) return
 
-    const poll = async () => {
-      try {
-        const res = await fetch('/esp32/distance')
-        if (!res.ok) return
-        const text = await res.text()
-        const distance = parseFloat(text)
-        if (isNaN(distance)) return
+    const inRange = distance < PROXIMITY_THRESHOLD
 
-        const inRange = distance < PROXIMITY_THRESHOLD
-
-        // Person entered range → trigger immediately
-        if (inRange && !sensorActiveRef.current) {
-          sensorActiveRef.current = true
-          lockedOutRef.current = false
-          failCountRef.current = 0
-          setFailCount(0)
-          setLockedOut(false)
-          console.log(`[PROXIMITY] ${distance}cm — in range, triggering recognition`)
-          recognize()
-        }
-
-        // Person left range → reset everything
-        if (!inRange && sensorActiveRef.current) {
-          sensorActiveRef.current = false
-          lockedOutRef.current = false
-          failCountRef.current = 0
-          setFailCount(0)
-          setLockedOut(false)
-          clearTimeout(retryTimerRef.current)
-          console.log('[PROXIMITY] Out of range — reset')
-        }
-      } catch (_) {
-        // ESP32 unreachable — silent, button fallback still works
-      }
+    // Person entered range → trigger immediately
+    if (inRange && !sensorActiveRef.current) {
+      sensorActiveRef.current = true
+      lockedOutRef.current = false
+      failCountRef.current = 0
+      setFailCount(0)
+      setLockedOut(false)
+      console.log(`[PROXIMITY] ${distance}cm — in range, triggering recognition`)
+      recognize()
     }
 
-    distanceTimerRef.current = setInterval(poll, DISTANCE_POLL_MS)
-    return () => clearInterval(distanceTimerRef.current)
-  }, [useEsp32, cameraActive, recognize])
+    // Person left range → reset everything
+    if (!inRange && sensorActiveRef.current) {
+      sensorActiveRef.current = false
+      lockedOutRef.current = false
+      failCountRef.current = 0
+      setFailCount(0)
+      setLockedOut(false)
+      clearTimeout(retryTimerRef.current)
+      console.log('[PROXIMITY] Out of range — reset')
+    }
+  }, [distance, useRealApi, cameraActive, recognize])
 
   // Cleanup retry timer on unmount
   useEffect(() => {
@@ -399,14 +382,6 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
 
       let t = await simulateStage('detect'); timings.detect = t; totalMs += t
       t = await simulateStage('liveness'); timings.liveness = t; totalMs += t
-
-      const isReal = Math.random() > 0.1
-      if (!isReal) {
-        setStages(prev => prev.map(s => s.key === 'liveness' ? { ...s, status: 'failed' } : s))
-        const r = { matched: false, name: null, confidence: 0, is_real: false, face_bbox: faceBbox, error: 'Spoof detected — liveness check failed', timing: { ...timings, total: totalMs } }
-        setLastResult(r); setPipelineState('denied'); busyRef.current = false; return r
-      }
-
       t = await simulateStage('align'); timings.align = t; totalMs += t
       t = await simulateStage('embed'); timings.embed = t; totalMs += t
       t = await simulateStage('search'); timings.search = t; totalMs += t
@@ -492,15 +467,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, onMatc
 
       // ── MOCK ──────────────────────────────────────────────────
       await simulateStage('detect'); setEnrollProgress(25)
-      const isReal = Math.random() > 0.05
       await simulateStage('liveness'); setEnrollProgress(50)
-
-      if (!isReal) {
-        setStages(prev => prev.map(s => s.key === 'liveness' ? { ...s, status: 'failed' } : s))
-        setPipelineState('denied'); setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
-        return { ok: false, reason: 'Spoof detected — cannot enroll from a photo/replay' }
-      }
-
       await simulateStage('align'); setEnrollProgress(70)
       await simulateStage('embed'); setEnrollProgress(90)
       await simulateStage('search'); setEnrollProgress(100)

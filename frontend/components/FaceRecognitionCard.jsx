@@ -216,17 +216,13 @@ export default function FaceRecognitionCard({
             <div className={styles.resultCard}>
               <div className={styles.resultHeader}>
                 <span className={styles.resultIcon}>
-                  {lastResult.matched ? '✅' : lastResult.error?.includes('Spoof') ? '🚫' : '❌'}
+                  {lastResult.matched ? '✅' : '❌'}
                 </span>
                 <span className={`${styles.resultTitle} ${
-                  lastResult.matched ? styles.resultMatched
-                  : lastResult.error?.includes('Spoof') ? styles.resultError
-                  : styles.resultDenied
+                  lastResult.matched ? styles.resultMatched : styles.resultDenied
                 }`}>
                   {lastResult.matched
                     ? `MATCH — ${lastResult.name}`
-                    : lastResult.error?.includes('Spoof')
-                    ? 'SPOOF DETECTED'
                     : lastResult.error?.includes('No face')
                     ? 'NO FACE'
                     : 'NO MATCH'}
@@ -240,9 +236,6 @@ export default function FaceRecognitionCard({
                       Confidence: <span className={styles.metaValue}>{Math.round(lastResult.confidence * 100)}%</span>
                     </div>
                     <div className={styles.metaItem}>
-                      Liveness: <span className={styles.metaValue} style={{ color: 'var(--success)' }}>✓ Real</span>
-                    </div>
-                    <div className={styles.metaItem}>
                       Total: <span className={styles.metaValue}>{lastResult.timing?.total ?? '—'}ms</span>
                     </div>
                   </div>
@@ -253,12 +246,6 @@ export default function FaceRecognitionCard({
               )}
 
               {lastResult.error && <div className={styles.errorMsg}>{lastResult.error}</div>}
-
-              {lastResult.is_real !== undefined && !lastResult.is_real && (
-                <div className={styles.spoofWarning}>
-                  ⚠️ Liveness check failed — possible photo/replay attack
-                </div>
-              )}
             </div>
           )}
 
