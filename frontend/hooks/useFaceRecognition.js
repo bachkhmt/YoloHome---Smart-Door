@@ -382,14 +382,6 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, distan
 
       let t = await simulateStage('detect'); timings.detect = t; totalMs += t
       t = await simulateStage('liveness'); timings.liveness = t; totalMs += t
-
-      const isReal = Math.random() > 0.1
-      if (!isReal) {
-        setStages(prev => prev.map(s => s.key === 'liveness' ? { ...s, status: 'failed' } : s))
-        const r = { matched: false, name: null, confidence: 0, is_real: false, face_bbox: faceBbox, error: 'Spoof detected — liveness check failed', timing: { ...timings, total: totalMs } }
-        setLastResult(r); setPipelineState('denied'); busyRef.current = false; return r
-      }
-
       t = await simulateStage('align'); timings.align = t; totalMs += t
       t = await simulateStage('embed'); timings.embed = t; totalMs += t
       t = await simulateStage('search'); timings.search = t; totalMs += t
@@ -475,15 +467,7 @@ export function useFaceRecognition({ useRealApi = false, esp32Url = null, distan
 
       // ── MOCK ──────────────────────────────────────────────────
       await simulateStage('detect'); setEnrollProgress(25)
-      const isReal = Math.random() > 0.05
       await simulateStage('liveness'); setEnrollProgress(50)
-
-      if (!isReal) {
-        setStages(prev => prev.map(s => s.key === 'liveness' ? { ...s, status: 'failed' } : s))
-        setPipelineState('denied'); setEnrolling(false); busyRef.current = false; blockUnlockRef.current = false
-        return { ok: false, reason: 'Spoof detected — cannot enroll from a photo/replay' }
-      }
-
       await simulateStage('align'); setEnrollProgress(70)
       await simulateStage('embed'); setEnrollProgress(90)
       await simulateStage('search'); setEnrollProgress(100)
